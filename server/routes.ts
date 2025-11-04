@@ -1,13 +1,14 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { isAuthenticated, hasRole } from "./auth";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Products API
-  app.get("/api/products", async (req, res) => {
+  // Products API - Different roles have different permissions
+  app.get("/api/products", isAuthenticated, async (req, res) => {
     try {
       const products = await storage.getProducts();
       res.json(products);
@@ -17,7 +18,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/products/:id", async (req, res) => {
+  app.get("/api/products/:id", isAuthenticated, async (req, res) => {
     try {
       const product = await storage.getProduct(req.params.id);
       if (!product) {
@@ -30,45 +31,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/products", async (req, res) => {
-    try {
-      // Convert empty date strings to null to avoid PostgreSQL errors
-      const productData = {
-        ...req.body,
-        manufacturing_date: req.body.manufacturing_date || null,
-        expiry_date: req.body.expiry_date || null,
-      };
-      
-      const product = await storage.createProduct(productData);
-      res.status(201).json(product);
-    } catch (error) {
-      console.error("Error creating product:", error);
-      res.status(500).json({ error: "Failed to create product" });
-    }
-  });
+  // Only admin and manager can create products
+  app.post(
+    "/api/products",
+    isAuthenticated,
+    hasRole("admin", "store_manager"),
+    async (req, res) => {
+      try {
+        // Convert empty date strings to null to avoid PostgreSQL errors
+        const productData = {
+          ...req.body,
+          manufacturing_date: req.body.manufacturing_date || null,
+          expiry_date: req.body.expiry_date || null,
+        };
 
-  app.put("/api/products/:id", async (req, res) => {
-    try {
-      // Convert empty date strings to null to avoid PostgreSQL errors
-      const productData = {
-        ...req.body,
-        manufacturing_date: req.body.manufacturing_date || null,
-        expiry_date: req.body.expiry_date || null,
-      };
-      
-      const product = await storage.updateProduct(req.params.id, productData);
-      if (!product) {
-        return res.status(404).json({ error: "Product not found" });
+        const product = await storage.createProduct(productData);
+        res.status(201).json(product);
+      } catch (error) {
+        console.error("Error creating product:", error);
+        res.status(500).json({ error: "Failed to create product" });
       }
-      res.json(product);
-    } catch (error) {
-      console.error("Error updating product:", error);
-      res.status(500).json({ error: "Failed to update product" });
     }
-  });
+  );
 
-  // Customers API
-  app.get("/api/customers", async (req, res) => {
+  // Only admin and manager can update products
+  app.put(
+    "/api/products/:id",
+    isAuthenticated,
+    hasRole("admin", "store_manager"),
+    async (req, res) => {
+      try {
+        // Convert empty date strings to null to avoid PostgreSQL errors
+        const productData = {
+          ...req.body,
+          manufacturing_date: req.body.manufacturing_date || null,
+          expiry_date: req.body.expiry_date || null,
+        };
+
+        const product = await storage.updateProduct(req.params.id, productData);
+        if (!product) {
+          return res.status(404).json({ error: "Product not found" });
+        }
+        res.json(product);
+      } catch (error) {
+        console.error("Error updating product:", error);
+        res.status(500).json({ error: "Failed to update product" });
+      }
+    }
+  );
+
+  // Customers API - All authenticated users can view
+  app.get("/api/customers", isAuthenticated, async (req, res) => {
     try {
       const customers = await storage.getCustomers();
       res.json(customers);
@@ -78,18 +91,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/customers", async (req, res) => {
-    try {
-      const customer = await storage.createCustomer(req.body);
-      res.status(201).json(customer);
-    } catch (error) {
-      console.error("Error creating customer:", error);
-      res.status(500).json({ error: "Failed to create customer" });
+  app.post(
+    "/api/customers",
+    isAuthenticated,
+    hasRole("admin", "store_manager", "inventory_manager"),
+    async (req, res) => {
+      try {
+        const customer = await storage.createCustomer(req.body);
+        res.status(201).json(customer);
+      } catch (error) {
+        console.error("Error creating customer:", error);
+        res.status(500).json({ error: "Failed to create customer" });
+      }
     }
-  });
+  );
 
-  // Bills API
-  app.get("/api/bills", async (req, res) => {
+  // Bills API - All authenticated users can view
+  app.get("/api/bills", isAuthenticated, async (req, res) => {
     try {
       const bills = await storage.getBills();
       res.json(bills);
@@ -99,7 +117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/bills/today", async (req, res) => {
+  app.get("/api/bills/today", isAuthenticated, async (req, res) => {
     try {
       const bills = await storage.getBillsForToday();
       res.json(bills);
@@ -109,18 +127,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/bills", async (req, res) => {
-    try {
-      const bill = await storage.createBill(req.body);
-      res.status(201).json(bill);
-    } catch (error) {
-      console.error("Error creating bill:", error);
-      res.status(500).json({ error: "Failed to create bill" });
+  // Staff, manager, and admin can create bills
+  app.post(
+    "/api/bills",
+    isAuthenticated,
+    hasRole("admin", "store_manager", "inventory_manager"),
+    async (req, res) => {
+      try {
+        const bill = await storage.createBill(req.body);
+        res.status(201).json(bill);
+      } catch (error) {
+        console.error("Error creating bill:", error);
+        res.status(500).json({ error: "Failed to create bill" });
+      }
     }
-  });
+  );
 
   // Bill items API
-  app.get("/api/bills/:billId/items", async (req, res) => {
+  app.get("/api/bills/:billId/items", isAuthenticated, async (req, res) => {
     try {
       const items = await storage.getBillItems(req.params.billId);
       res.json(items);
@@ -130,21 +154,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/bills/:billId/items", async (req, res) => {
-    try {
-      const item = await storage.createBillItem({
-        ...req.body,
-        bill_id: req.params.billId
-      });
-      res.status(201).json(item);
-    } catch (error) {
-      console.error("Error creating bill item:", error);
-      res.status(500).json({ error: "Failed to create bill item" });
+  app.post(
+    "/api/bills/:billId/items",
+    isAuthenticated,
+    hasRole("admin", "store_manager", "inventory_manager"),
+    async (req, res) => {
+      try {
+        const item = await storage.createBillItem({
+          ...req.body,
+          bill_id: req.params.billId,
+        });
+        res.status(201).json(item);
+      } catch (error) {
+        console.error("Error creating bill item:", error);
+        res.status(500).json({ error: "Failed to create bill item" });
+      }
     }
-  });
+  );
 
   // Inventory transactions API
-  app.get("/api/inventory-transactions", async (req, res) => {
+  app.get("/api/inventory-transactions", isAuthenticated, async (req, res) => {
     try {
       const productId = req.query.product_id as string;
       const transactions = await storage.getInventoryTransactions(productId);
@@ -155,44 +184,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/inventory-transactions", async (req, res) => {
-    try {
-      const transaction = await storage.createInventoryTransaction(req.body);
-      res.status(201).json(transaction);
-    } catch (error) {
-      console.error("Error creating inventory transaction:", error);
-      res.status(500).json({ error: "Failed to create inventory transaction" });
+  app.post(
+    "/api/inventory-transactions",
+    isAuthenticated,
+    hasRole("admin", "store_manager"),
+    async (req, res) => {
+      try {
+        const transaction = await storage.createInventoryTransaction(req.body);
+        res.status(201).json(transaction);
+      } catch (error) {
+        console.error("Error creating inventory transaction:", error);
+        res
+          .status(500)
+          .json({ error: "Failed to create inventory transaction" });
+      }
     }
-  });
+  );
 
-  // Dashboard stats API
-  app.get("/api/dashboard/stats", async (req, res) => {
+  // Dashboard stats API - All authenticated users
+  app.get("/api/dashboard/stats", isAuthenticated, async (req, res) => {
     try {
       const products = await storage.getProducts();
       const todayBills = await storage.getBillsForToday();
       const allBills = await storage.getBills();
       const customers = await storage.getCustomers();
-      
-      const lowStock = products.filter(p => (p.quantity_in_stock || 0) <= (p.min_stock_level || 0));
-      const expiring = products.filter(p => {
+
+      const lowStock = products.filter(
+        (p) => (p.quantity_in_stock || 0) <= (p.min_stock_level || 0)
+      );
+      const expiring = products.filter((p) => {
         if (!p.expiry_date) return false;
         const expiryDate = new Date(p.expiry_date);
         const now = new Date();
-        const daysDiff = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 3600 * 24));
+        const daysDiff = Math.ceil(
+          (expiryDate.getTime() - now.getTime()) / (1000 * 3600 * 24)
+        );
         return daysDiff <= 7 && daysDiff >= 0;
       });
-      
+
       const stats = {
         totalProducts: products.length,
         lowStock: lowStock.length,
         todaySales: todayBills.length,
-        totalRevenue: allBills.reduce((sum, bill) => sum + Number(bill.final_amount), 0),
+        totalRevenue: allBills.reduce(
+          (sum, bill) => sum + Number(bill.final_amount),
+          0
+        ),
         expiringProducts: expiring.length,
         totalCustomers: customers.length,
         lowStockProducts: lowStock,
-        expiringProductsList: expiring
+        expiringProductsList: expiring,
       };
-      
+
       res.json(stats);
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);

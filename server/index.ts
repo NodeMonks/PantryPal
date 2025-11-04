@@ -1,13 +1,42 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { setupAuth } from "./auth";
+import { setupAuthRoutes } from "./authRoutes";
 import dotenv from "dotenv";
+import helmet from "helmet";
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import { registerJwtRoutes } from "./routes.jwt";
 
 dotenv.config();
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Security middlewares
+const isDev = app.get("env") === "development";
+app.use(
+  helmet({
+    // In dev, disable CSP so Vite/react-refresh inline preambles and overlays can run
+    contentSecurityPolicy: isDev ? false : undefined,
+    crossOriginEmbedderPolicy: isDev ? false : undefined,
+  })
+);
+app.use(
+  cors({
+    origin: (
+      _origin: string | undefined,
+      cb: (err: Error | null, allow?: boolean) => void
+    ) => cb(null, true), // adjust to explicit origins in production
+    credentials: true,
+  })
+);
+app.use(cookieParser());
+
+// Setup authentication (must be before routes)
+setupAuth(app);
 
 // Simple request logger
 app.use((req, res, next) => {
@@ -22,12 +51,19 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Setup auth routes first
+  setupAuthRoutes(app);
+  // Setup JWT-based routes (new)
+  registerJwtRoutes(app);
+
   const server = await registerRoutes(app);
 
   // Global error handler
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || 500;
-    res.status(status).json({ message: err.message || "Internal Server Error" });
+    res
+      .status(status)
+      .json({ message: err.message || "Internal Server Error" });
   });
 
   // Serve static files or use Vite in dev mode

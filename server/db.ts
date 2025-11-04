@@ -1,18 +1,19 @@
 // server/db.ts
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-import * as schema from "../shared/schema"; // ✅ corrected import path
+import { drizzle } from "drizzle-orm/neon-http";
+import { neon } from "@neondatabase/serverless";
+import * as schema from "../shared/schema";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-// Use environment variable or fallback
-const connectionString = process.env.DATABASE_URL || "postgresql://vanshuser:Intruder%4023@localhost:5432/projectdb";
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL is not set in environment variables");
+}
 
-// Disable prefetch since it’s not supported for Transaction pool mode
-const client = postgres(connectionString, { prepare: false });
+// Create Neon serverless client
+const sql = neon(process.env.DATABASE_URL);
 
 // Create drizzle database instance
-export const db = drizzle(client, { schema });
+export const db = drizzle(sql, { schema });
 
-console.log("✅ Connected to PostgreSQL successfully");
+console.log("✅ Connected to Neon DB successfully");

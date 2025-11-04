@@ -1,5 +1,5 @@
 // API client to replace Supabase calls
-const API_BASE = '/api';
+const API_BASE = "/api";
 
 export interface Product {
   id: string;
@@ -54,8 +54,14 @@ export interface DashboardStats {
 
 class ApiClient {
   async get<T>(endpoint: string): Promise<T> {
-    const response = await fetch(`${API_BASE}${endpoint}`);
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      credentials: "include", // Include cookies for authentication
+    });
     if (!response.ok) {
+      if (response.status === 401) {
+        // Redirect to login if unauthorized
+        window.location.href = "/login";
+      }
       throw new Error(`API Error: ${response.statusText}`);
     }
     return response.json();
@@ -63,13 +69,17 @@ class ApiClient {
 
   async post<T>(endpoint: string, data: any): Promise<T> {
     const response = await fetch(`${API_BASE}${endpoint}`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
+      credentials: "include", // Include cookies for authentication
       body: JSON.stringify(data),
     });
     if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = "/login";
+      }
       throw new Error(`API Error: ${response.statusText}`);
     }
     return response.json();
@@ -77,13 +87,17 @@ class ApiClient {
 
   async put<T>(endpoint: string, data: any): Promise<T> {
     const response = await fetch(`${API_BASE}${endpoint}`, {
-      method: 'PUT',
+      method: "PUT",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
+      credentials: "include", // Include cookies for authentication
       body: JSON.stringify(data),
     });
     if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = "/login";
+      }
       throw new Error(`API Error: ${response.statusText}`);
     }
     return response.json();
@@ -91,7 +105,7 @@ class ApiClient {
 
   // Products
   async getProducts(): Promise<Product[]> {
-    return this.get<Product[]>('/products');
+    return this.get<Product[]>("/products");
   }
 
   async getProduct(id: string): Promise<Product> {
@@ -99,7 +113,7 @@ class ApiClient {
   }
 
   async createProduct(product: Partial<Product>): Promise<Product> {
-    return this.post<Product>('/products', product);
+    return this.post<Product>("/products", product);
   }
 
   async updateProduct(id: string, product: Partial<Product>): Promise<Product> {
@@ -108,29 +122,29 @@ class ApiClient {
 
   // Customers
   async getCustomers(): Promise<Customer[]> {
-    return this.get<Customer[]>('/customers');
+    return this.get<Customer[]>("/customers");
   }
 
   async createCustomer(customer: Partial<Customer>): Promise<Customer> {
-    return this.post<Customer>('/customers', customer);
+    return this.post<Customer>("/customers", customer);
   }
 
   // Bills
   async getBills(): Promise<Bill[]> {
-    return this.get<Bill[]>('/bills');
+    return this.get<Bill[]>("/bills");
   }
 
   async getTodayBills(): Promise<Bill[]> {
-    return this.get<Bill[]>('/bills/today');
+    return this.get<Bill[]>("/bills/today");
   }
 
   async createBill(bill: Partial<Bill>): Promise<Bill> {
-    return this.post<Bill>('/bills', bill);
+    return this.post<Bill>("/bills", bill);
   }
 
   // Dashboard
   async getDashboardStats(): Promise<DashboardStats> {
-    return this.get<DashboardStats>('/dashboard/stats');
+    return this.get<DashboardStats>("/dashboard/stats");
   }
 }
 
