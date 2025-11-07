@@ -5,5 +5,4 @@ server/public
 vite.config.ts.*
 *.tar.gz
 .env
-E:\PantryPal\PantryPal\.env
 .env.local
