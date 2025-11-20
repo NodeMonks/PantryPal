@@ -834,11 +834,32 @@ npm start
 
 ## 📚 Additional Documentation
 
-- `AUTH_SETUP_GUIDE.md` - Detailed authentication setup
-- `MULTI_AUTH_SUMMARY.md` - Dual auth system explanation
-- `ROLE_MIGRATION.md` - RBAC role changes
-- `SECURITY_COMPLETE.md` - Security implementation details
+All detailed guides are available in the [`docs/`](./docs) folder:
+
+### Setup & Configuration
+- [`docs/QUICKSTART.md`](./docs/QUICKSTART.md) - Quick start guide
+- [`docs/AUTH_SETUP_GUIDE.md`](./docs/AUTH_SETUP_GUIDE.md) - Detailed authentication setup
+- [`docs/QUICK_START_AUTH.md`](./docs/QUICK_START_AUTH.md) - Quick auth configuration
+- [`docs/NEON_MIGRATION.md`](./docs/NEON_MIGRATION.md) - Database migration guide
+
+### Authentication & Security
+- [`docs/MULTI_AUTH_SUMMARY.md`](./docs/MULTI_AUTH_SUMMARY.md) - Dual auth system explanation
+- [`docs/AUTH_JWT_README.md`](./docs/AUTH_JWT_README.md) - JWT implementation details
+- [`docs/SECURITY_COMPLETE.md`](./docs/SECURITY_COMPLETE.md) - Complete security guide
+- [`docs/SECURITY_SUMMARY.md`](./docs/SECURITY_SUMMARY.md) - Security summary
+
+### Features & Implementation
+- [`docs/REGISTRATION_FEATURE.md`](./docs/REGISTRATION_FEATURE.md) - User registration flow
+- [`docs/ROLE_MIGRATION.md`](./docs/ROLE_MIGRATION.md) - RBAC role changes
+- [`docs/IMPLEMENTATION_COMPLETE.md`](./docs/IMPLEMENTATION_COMPLETE.md) - Complete implementation guide
+- [`docs/IMPLEMENTATION_SUMMARY.md`](./docs/IMPLEMENTATION_SUMMARY.md) - Implementation summary
+
+### Docker & Testing
+- [`docs/DOCKER_TESTING_GUIDE.md`](./docs/DOCKER_TESTING_GUIDE.md) - Containerization & testing guide
+
+### Configuration Templates
 - `.env.email-sms` - Email/SMS configuration template
+- `.env.docker` - Docker environment template
 
 ---
 

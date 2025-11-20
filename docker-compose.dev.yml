@@ -1,0 +1,28 @@
+# Development override for docker-compose
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: pantrypal-dev
+    volumes:
+      # Bind mount source code for hot reload
+      - ./client:/app/client
+      - ./server:/app/server
+      - ./shared:/app/shared
+      - ./package.json:/app/package.json
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./vite.config.ts:/app/vite.config.ts
+      - ./tailwind.config.ts:/app/tailwind.config.ts
+      - ./components.json:/app/components.json
+      # Prevent node_modules from being overwritten
+      - /app/node_modules
+    environment:
+      NODE_ENV: development
+    command: npm run dev
+    ports:
+      - "5000:5000"  # Backend + Vite HMR

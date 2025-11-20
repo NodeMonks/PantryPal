@@ -1,0 +1,84 @@
+# Dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# Build artifacts (will be generated in container)
+dist
+.next
+out
+
+# Development files
+*.log
+*.swp
+*.swo
+*~
+.DS_Store
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Testing
+coverage
+.nyc_output
+*.test.ts
+*.spec.ts
+__tests__
+__mocks__
+
+# Environment files (use docker-compose env instead)
+.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+docs
+*.md
+!README.md
+docs
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# Scripts (except necessary ones)
+scripts/create-admin.ts
+scripts/seed-test-users.ts
+scripts/test-*.ts
+
+# Database files
+*.db
+*.sqlite
+
+# Temporary files
+tmp
+temp
+*.tmp
+
+# Replit specific
+.replit
+replit.nix
+replit.md
+
+# Backups
+*.backup
+*.bak
+*.old
+
+# Client source maps
+*.map
