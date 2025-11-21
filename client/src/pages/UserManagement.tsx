@@ -42,9 +42,21 @@ import {
   ShieldAlert,
   ShieldCheck,
   UserCog,
+  Users,
+  UserCheck,
+  UserX,
+  TrendingUp,
+  Copy,
+  MoreVertical,
 } from "lucide-react";
 import { JWTAuthProvider, useJWTAuth } from "../contexts/JWTAuthContext";
 import { OrgIdDisplay } from "@/components/OrgIdDisplay";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface User {
   id: number;
@@ -81,10 +93,8 @@ export default function UserManagement() {
   }, []);
 
   useEffect(() => {
-    // Filter users based on search and filters
     let filtered = users;
 
-    // Search filter
     if (searchTerm) {
       filtered = filtered.filter(
         (user) =>
@@ -95,15 +105,13 @@ export default function UserManagement() {
       );
     }
 
-    // Role filter
     if (roleFilter !== "all") {
       filtered = filtered.filter((user) => user.role === roleFilter);
     }
 
-    // Status filter
     if (statusFilter !== "all") {
-      filtered = filtered.filter(
-        (user) => user.is_active === (statusFilter === "active")
+      filtered = filtered.filter((user) =>
+        statusFilter === "active" ? user.is_active : !user.is_active
       );
     }
 
@@ -118,6 +126,7 @@ export default function UserManagement() {
       if (response.ok) {
         const data = await response.json();
         setUsers(data);
+        setFilteredUsers(data);
       }
     } catch (error) {
       console.error("Failed to fetch users:", error);
@@ -133,8 +142,8 @@ export default function UserManagement() {
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(newUser),
+        credentials: "include",
       });
 
       if (response.ok) {
@@ -159,35 +168,12 @@ export default function UserManagement() {
     }
   };
 
-  const handleUpdateRole = async (userId: number, newRole: string) => {
+  const toggleUserStatus = async (userId: number, isActive: boolean) => {
     try {
-      const response = await fetch(`/api/auth/users/${userId}/role`, {
+      const response = await fetch(`/api/auth/users/${userId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ role: newRole }),
-      });
-
-      if (response.ok) {
-        toast.success("User role updated");
-        fetchUsers();
-      } else {
-        toast.error("Failed to update role");
-      }
-    } catch (error) {
-      console.error("Failed to update role:", error);
-      toast.error("Failed to update role");
-    }
-  };
-
-  const handleToggleActive = async (userId: number, isActive: boolean) => {
-    const endpoint = isActive
-      ? `/api/auth/users/${userId}/deactivate`
-      : `/api/auth/users/${userId}/activate`;
-
-    try {
-      const response = await fetch(endpoint, {
-        method: "PATCH",
+        body: JSON.stringify({ is_active: !isActive }),
         credentials: "include",
       });
 
@@ -209,18 +195,35 @@ export default function UserManagement() {
       {
         variant: "default" | "secondary" | "destructive" | "outline";
         icon: any;
+        color: string;
       }
     > = {
-      admin: { variant: "destructive", icon: ShieldAlert },
-      store_manager: { variant: "default", icon: ShieldCheck },
-      inventory_manager: { variant: "secondary", icon: Shield },
-      cashier: { variant: "outline", icon: UserCog },
+      admin: {
+        variant: "destructive",
+        icon: ShieldAlert,
+        color: "bg-red-100 text-red-700 dark:bg-red-900/30",
+      },
+      store_manager: {
+        variant: "default",
+        icon: ShieldCheck,
+        color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30",
+      },
+      inventory_manager: {
+        variant: "secondary",
+        icon: Shield,
+        color: "bg-green-100 text-green-700 dark:bg-green-900/30",
+      },
+      cashier: {
+        variant: "outline",
+        icon: UserCog,
+        color: "bg-gray-100 text-gray-700 dark:bg-gray-900/30",
+      },
     };
     const config = variants[role] || variants.cashier;
     const Icon = config.icon;
 
     return (
-      <Badge variant={config.variant} className="gap-1">
+      <Badge className={`gap-1 ${config.color} border-0`}>
         <Icon className="h-3 w-3" />
         {role}
       </Badge>
@@ -242,291 +245,180 @@ export default function UserManagement() {
     );
   }
 
+  const stats = {
+    total: users.length,
+    active: users.filter((u) => u.is_active).length,
+    inactive: users.filter((u) => !u.is_active).length,
+    byRole: {
+      admin: users.filter((u) => u.role === "admin").length,
+      store_manager: users.filter((u) => u.role === "store_manager").length,
+      inventory_manager: users.filter((u) => u.role === "inventory_manager")
+        .length,
+      cashier: users.filter((u) => u.role === "cashier").length,
+    },
+  };
+
   return (
-    <div className="p-6 space-y-6 max-w-full overflow-x-hidden">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-3xl font-bold">User Management</h1>
-          <p className="text-muted-foreground">
-            Manage user accounts and permissions
-          </p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap justify-end shrink-0">
-          <OrgIdDisplay variant="inline" />
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <UserPlus className="h-4 w-4 mr-2" />
-                Add User
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <form onSubmit={handleCreateUser}>
-                <DialogHeader>
-                  <DialogTitle>Create New User</DialogTitle>
-                  <DialogDescription>
-                    Add a new user account to the system
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="username">Username *</Label>
-                    <Input
-                      id="username"
-                      required
-                      value={newUser.username}
-                      onChange={(e) =>
-                        setNewUser({ ...newUser, username: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email *</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      required
-                      value={newUser.email}
-                      onChange={(e) =>
-                        setNewUser({ ...newUser, email: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Password *</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      required
-                      value={newUser.password}
-                      onChange={(e) =>
-                        setNewUser({ ...newUser, password: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="full_name">Full Name</Label>
-                    <Input
-                      id="full_name"
-                      value={newUser.full_name}
-                      onChange={(e) =>
-                        setNewUser({ ...newUser, full_name: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone</Label>
-                    <Input
-                      id="phone"
-                      value={newUser.phone}
-                      onChange={(e) =>
-                        setNewUser({ ...newUser, phone: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Role *</Label>
-                    <Select
-                      value={newUser.role}
-                      onValueChange={(value) =>
-                        setNewUser({ ...newUser, role: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="store_manager">
-                          Store Manager
-                        </SelectItem>
-                        <SelectItem value="inventory_manager">
-                          Inventory Manager
-                        </SelectItem>
-                        <SelectItem value="cashier">Cashier</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button type="submit">Create User</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-          <Dialog
-            open={isInviteDialogOpen}
-            onOpenChange={setIsInviteDialogOpen}
-          >
-            <DialogTrigger asChild>
-              <Button variant="secondary">
-                <UserPlus className="h-4 w-4 mr-2" />
-                Invite User
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Invite User</DialogTitle>
-                <DialogDescription>
-                  Send an invitation link to a user to join your organization
-                </DialogDescription>
-              </DialogHeader>
-              <JWTAuthProvider>
-                <InviteUserForm
-                  onSuccessLink={() => toast.success("Invite created")}
-                />
-              </JWTAuthProvider>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
-
-      {/* Search and Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Search & Filter Users</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label>Search</Label>
-              <Input
-                placeholder="Search by name, email, or username..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Filter by Role</Label>
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Roles</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="store_manager">Store Manager</SelectItem>
-                  <SelectItem value="inventory_manager">
-                    Inventory Manager
-                  </SelectItem>
-                  <SelectItem value="cashier">Cashier</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Filter by Status</Label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>All Users</CardTitle>
-          <CardDescription>
-            Showing {filteredUsers.length} of {users.length} user
-            {users.length !== 1 ? "s" : ""}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800">
+      <div className="p-6 md:p-8 max-w-[1600px] mx-auto space-y-6">
+        {/* Header Section */}
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
-            <Table className="w-full table-fixed text-sm">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="whitespace-nowrap w-[16%]">
-                    Username
-                  </TableHead>
-                  <TableHead className="whitespace-nowrap w-[22%]">
-                    Email
-                  </TableHead>
-                  <TableHead className="whitespace-nowrap w-[16%]">
-                    Full Name
-                  </TableHead>
-                  <TableHead className="w-[12%]">Role</TableHead>
-                  <TableHead className="whitespace-nowrap w-[16%]">
-                    Status
-                  </TableHead>
-                  <TableHead className="whitespace-nowrap w-[10%]">
-                    Created
-                  </TableHead>
-                  <TableHead className="whitespace-nowrap w-[8%]">
-                    Actions
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredUsers.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
-                      {searchTerm ||
-                      roleFilter !== "all" ||
-                      statusFilter !== "all"
-                        ? "No users found matching your filters."
-                        : "No users in the system."}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell
-                        className="font-medium max-w-[220px] truncate"
-                        title={user.username}
-                      >
-                        {user.username}
-                      </TableCell>
-                      <TableCell
-                        className="max-w-[260px] truncate"
-                        title={user.email}
-                      >
-                        {user.email}
-                      </TableCell>
-                      <TableCell
-                        className="max-w-[220px] truncate"
-                        title={user.full_name || "-"}
-                      >
-                        {user.full_name || "-"}
-                      </TableCell>
-                      <TableCell>{getRoleBadge(user.role)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge
-                            variant={user.is_active ? "default" : "secondary"}
-                          >
-                            {user.is_active ? "Active" : "Inactive"}
-                          </Badge>
-                          <Button
-                            variant={user.is_active ? "destructive" : "default"}
-                            size="sm"
-                            onClick={() =>
-                              handleToggleActive(user.id, user.is_active)
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-gray-900 dark:text-white">
+              User Management
+            </h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">
+              Manage user accounts and permissions
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <OrgIdDisplay variant="badge" />
+          </div>
+        </div>
+
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+          {/* Total Users */}
+          <Card className="border-0 shadow-md hover:shadow-lg transition-shadow bg-gradient-to-br from-orange-500 to-orange-600 text-white">
+            <CardContent className="p-5 md:p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-orange-100 text-sm font-medium">
+                    Total Users
+                  </p>
+                  <h3 className="text-3xl md:text-4xl font-bold mt-2">
+                    {stats.total}
+                  </h3>
+                  <p className="text-orange-100 text-xs mt-2 flex items-center gap-1">
+                    <TrendingUp className="h-3 w-3" />+
+                    {stats.byRole.admin + stats.byRole.store_manager} admins
+                  </p>
+                </div>
+                <div className="h-14 w-14 md:h-16 md:w-16 bg-white/20 rounded-2xl flex items-center justify-center">
+                  <Users className="h-7 w-7 md:h-8 md:w-8" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Active Users */}
+          <Card className="border-0 shadow-md hover:shadow-lg transition-shadow">
+            <CardContent className="p-5 md:p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">
+                    Active Users
+                  </p>
+                  <h3 className="text-3xl md:text-4xl font-bold mt-2 text-green-600">
+                    {stats.active}
+                  </h3>
+                  <p className="text-gray-500 text-xs mt-2">
+                    Currently enabled
+                  </p>
+                </div>
+                <div className="h-14 w-14 md:h-16 md:w-16 bg-green-100 dark:bg-green-900/30 rounded-2xl flex items-center justify-center">
+                  <UserCheck className="h-7 w-7 md:h-8 md:w-8 text-green-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Inactive Users */}
+          <Card className="border-0 shadow-md hover:shadow-lg transition-shadow">
+            <CardContent className="p-5 md:p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">
+                    Inactive
+                  </p>
+                  <h3 className="text-3xl md:text-4xl font-bold mt-2 text-red-600">
+                    {stats.inactive}
+                  </h3>
+                  <p className="text-gray-500 text-xs mt-2">Deactivated</p>
+                </div>
+                <div className="h-14 w-14 md:h-16 md:w-16 bg-red-100 dark:bg-red-900/30 rounded-2xl flex items-center justify-center">
+                  <UserX className="h-7 w-7 md:h-8 md:w-8 text-red-600" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions */}
+          <Card className="border-0 shadow-md hover:shadow-lg transition-shadow">
+            <CardContent className="p-5 md:p-6">
+              <div className="space-y-3">
+                <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">
+                  Quick Actions
+                </p>
+                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white">
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Add User
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Create New User</DialogTitle>
+                      <DialogDescription>
+                        Add a new user to the organization
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleCreateUser}>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="username">Username *</Label>
+                          <Input
+                            id="username"
+                            value={newUser.username}
+                            onChange={(e) =>
+                              setNewUser({
+                                ...newUser,
+                                username: e.target.value,
+                              })
                             }
-                          >
-                            {user.is_active ? "Deactivate" : "Activate"}
-                          </Button>
+                            required
+                          />
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        {new Date(user.created_at).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2 flex-wrap items-center">
+
+                        <div className="space-y-2">
+                          <Label htmlFor="email">Email *</Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            value={newUser.email}
+                            onChange={(e) =>
+                              setNewUser({ ...newUser, email: e.target.value })
+                            }
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="password">Password *</Label>
+                          <Input
+                            id="password"
+                            type="password"
+                            value={newUser.password}
+                            onChange={(e) =>
+                              setNewUser({
+                                ...newUser,
+                                password: e.target.value,
+                              })
+                            }
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="role">Role *</Label>
                           <Select
-                            value={user.role}
+                            value={newUser.role}
                             onValueChange={(value) =>
-                              handleUpdateRole(user.id, value)
+                              setNewUser({ ...newUser, role: value })
                             }
                           >
-                            <SelectTrigger className="w-36">
+                            <SelectTrigger>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -541,20 +433,219 @@ export default function UserManagement() {
                             </SelectContent>
                           </Select>
                         </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="full_name">Full Name</Label>
+                          <Input
+                            id="full_name"
+                            value={newUser.full_name}
+                            onChange={(e) =>
+                              setNewUser({
+                                ...newUser,
+                                full_name: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="phone">Phone</Label>
+                          <Input
+                            id="phone"
+                            value={newUser.phone}
+                            onChange={(e) =>
+                              setNewUser({ ...newUser, phone: e.target.value })
+                            }
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button
+                          type="submit"
+                          className="bg-orange-500 hover:bg-orange-600"
+                        >
+                          Create User
+                        </Button>
+                      </DialogFooter>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+                <Dialog
+                  open={isInviteDialogOpen}
+                  onOpenChange={setIsInviteDialogOpen}
+                >
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="w-full">
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Invite User
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>Invite User</DialogTitle>
+                      <DialogDescription>
+                        Send an invitation link to a user to join your
+                        organization
+                      </DialogDescription>
+                    </DialogHeader>
+                    <JWTAuthProvider>
+                      <InviteUserForm
+                        onSuccessLink={() => toast.success("Invite created")}
+                      />
+                    </JWTAuthProvider>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Search and Filters */}
+        <Card className="border-0 shadow-md">
+          <CardHeader>
+            <CardTitle>Search & Filter Users</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Search</Label>
+                <Input
+                  placeholder="Search by name, email, or username..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Filter by Role</Label>
+                <Select value={roleFilter} onValueChange={setRoleFilter}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Roles</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="store_manager">Store Manager</SelectItem>
+                    <SelectItem value="inventory_manager">
+                      Inventory Manager
+                    </SelectItem>
+                    <SelectItem value="cashier">Cashier</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Filter by Status</Label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Users Table */}
+        <Card className="border-0 shadow-md">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-xl md:text-2xl">All Users</CardTitle>
+                <CardDescription className="mt-1.5">
+                  Showing {filteredUsers.length} of {users.length} users
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50 dark:bg-gray-800/50">
+                    <TableHead className="font-semibold">Username</TableHead>
+                    <TableHead className="font-semibold">Email</TableHead>
+                    <TableHead className="font-semibold">Full Name</TableHead>
+                    <TableHead className="font-semibold">Role</TableHead>
+                    <TableHead className="font-semibold">Status</TableHead>
+                    <TableHead className="font-semibold">Created</TableHead>
+                    <TableHead className="font-semibold text-right">
+                      Actions
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredUsers.map((user) => (
+                    <TableRow
+                      key={user.id}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-800/30"
+                    >
+                      <TableCell className="font-medium">
+                        {user.username}
+                      </TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>{user.full_name || "-"}</TableCell>
+                      <TableCell>{getRoleBadge(user.role)}</TableCell>
+                      <TableCell>
+                        <Badge
+                          className={
+                            user.is_active
+                              ? "bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 border-0"
+                              : "bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-900/30 border-0"
+                          }
+                        >
+                          {user.is_active ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-500">
+                        {new Date(user.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() =>
+                                toggleUserStatus(user.id, user.is_active)
+                              }
+                              className={
+                                user.is_active
+                                  ? "text-red-600"
+                                  : "text-green-600"
+                              }
+                            >
+                              {user.is_active ? "Deactivate" : "Activate"}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
 
-// A compact invite form reusing JWT auth to call /org/invite
+// Invite User Form Component
 function InviteUserForm({
   onSuccessLink,
 }: {
@@ -572,45 +663,32 @@ function InviteUserForm({
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
-  // auto-fill org from context
   useEffect(() => {
     if (orgId && !org) setOrg(orgId);
   }, [orgId, org]);
 
   useEffect(() => {
-    if (!accessToken) return;
     let ignore = false;
     (async () => {
-      async function loadRoles(token: string) {
-        const res = await fetch("/rbac/roles", {
-          headers: { Authorization: `Bearer ${token}` },
+      try {
+        const res = await fetch("/api/rbac/roles", {
+          credentials: "include",
         });
-        if (res.status === 401) return null; // signal to refresh
         if (!res.ok) {
-          // Gracefully degrade: no roles available (likely 403 or server issue)
-          return [] as { id: number; name: string }[];
+          setRoles([]);
+          return;
         }
         const data = await res.json();
-        return Array.isArray(data) ? data : [];
+        if (!ignore) setRoles(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Failed to load roles:", err);
+        if (!ignore) setRoles([]);
       }
-
-      let data = await loadRoles(accessToken);
-      if (data === null) {
-        try {
-          await refresh();
-          // re-read latest token from context state after refresh
-          const newToken = localStorage.getItem("jwt_access");
-          if (newToken) data = await loadRoles(newToken);
-        } catch {
-          data = [];
-        }
-      }
-      if (!ignore) setRoles(Array.isArray(data) ? data : []);
     })();
     return () => {
       ignore = true;
     };
-  }, [accessToken, refresh]);
+  }, []);
 
   const onLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -624,19 +702,18 @@ function InviteUserForm({
 
   const onInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accessToken) return setError("Please login first");
     if (!org) return setError("Org ID required");
     if (!roleId) return setError("Select a role");
     if (!fullName.trim()) return setError("Full name required");
     if (!phone.trim()) return setError("Phone required");
     setError(null);
     setSending(true);
-    const res = await fetch("/org/invite", {
+    const res = await fetch("/api/org/invite", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
       },
+      credentials: "include",
       body: JSON.stringify({
         org_id: org,
         email: inviteEmail,
@@ -653,141 +730,74 @@ function InviteUserForm({
 
   return (
     <div className="space-y-4">
-      {!accessToken ? (
-        <form onSubmit={onLogin} className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <Label>Admin Email</Label>
-              <Input
-                value={adminEmail}
-                onChange={(e) => setAdminEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Password</Label>
-              <Input
-                type="password"
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-              />
-            </div>
-          </div>
-          <Button type="submit">Login</Button>
-        </form>
-      ) : (
-        <form onSubmit={onInvite} className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <Label>Org ID</Label>
-              <Input
-                value={org}
-                onChange={(e) => setOrg(e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <Label>Invitee Email</Label>
-              <Input
-                type="email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                required
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <Label>Full Name</Label>
-              <Input
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <Label>Phone</Label>
-              <Input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                required
-              />
-            </div>
+      <form onSubmit={onInvite} className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <Label>Org ID</Label>
+            <Input
+              value={org}
+              onChange={(e) => setOrg(e.target.value)}
+              required
+            />
           </div>
           <div>
-            <Label>Role</Label>
-            <Select value={roleId} onValueChange={setRoleId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select role" />
-              </SelectTrigger>
-              <SelectContent>
-                {roles.map((r) => (
-                  <SelectItem key={r.id} value={String(r.id)}>
-                    {r.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {roles.length === 0 && (
-              <div className="text-xs text-muted-foreground mt-1">
-                No assignable roles available. You may lack permission to assign
-                roles.
-              </div>
-            )}
+            <Label>Invitee Email</Label>
+            <Input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              required
+            />
           </div>
-          <Button type="submit" disabled={sending || roles.length === 0}>
-            {sending ? "Verifying and sending (5s)..." : "Send Invite"}
-          </Button>
-        </form>
-      )}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <Label>Full Name</Label>
+            <Input
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <Label>Phone</Label>
+            <Input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              required
+            />
+          </div>
+        </div>
+        <div>
+          <Label>Role</Label>
+          <Select value={roleId} onValueChange={setRoleId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select role" />
+            </SelectTrigger>
+            <SelectContent>
+              {roles.map((r) => (
+                <SelectItem key={r.id} value={String(r.id)}>
+                  {r.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {roles.length === 0 && (
+            <div className="text-xs text-muted-foreground mt-1">
+              No assignable roles available. You may lack permission to assign
+              roles.
+            </div>
+          )}
+        </div>
+        <Button
+          type="submit"
+          disabled={sending || roles.length === 0}
+          className="w-full bg-orange-500 hover:bg-orange-600"
+        >
+          {sending ? "Verifying and sending (5s)..." : "Send Invite"}
+        </Button>
+      </form>
       {error && <div className="text-red-600 text-sm">{error}</div>}
     </div>
-  );
-}
-
-// Inline org id badge used in the All Users header
-function OrgIdInline() {
-  const { orgId: jwtOrgId } = useJWTAuth();
-  const [orgId, setOrgId] = useState<string | null>(jwtOrgId);
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (jwtOrgId) {
-      setOrgId(jwtOrgId);
-      return;
-    }
-    // Fallback: fetch org for session-auth users
-    fetch("/api/org/current", { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : Promise.resolve({ orgId: null })))
-      .then((d) => setOrgId(d?.orgId ?? null))
-      .catch(() => setOrgId(null));
-  }, [jwtOrgId]);
-
-  if (!orgId) return null;
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(orgId || "");
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    } catch {}
-  }
-
-  const short =
-    orgId.length > 10 ? `${orgId.slice(0, 8)}…${orgId.slice(-4)}` : orgId;
-  return (
-    <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-      <span className="font-medium">Org:</span>
-      <code className="px-1.5 py-0.5 rounded bg-muted text-foreground/80">
-        {short}
-      </code>
-      <button
-        type="button"
-        onClick={copy}
-        className="px-1.5 py-0.5 rounded border text-foreground/70 hover:bg-muted"
-        title="Copy Org ID"
-      >
-        {copied ? "Copied" : "Copy"}
-      </button>
-    </span>
   );
 }

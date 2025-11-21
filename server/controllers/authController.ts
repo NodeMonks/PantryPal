@@ -157,15 +157,25 @@ export async function orgInvite(req: Request, res: Response) {
   if (!targetRole) return res.status(400).json({ error: "Invalid role" });
   // Allowed mapping
   const inviterRoles = ctx.roles || [];
+  console.log("🔍 DEBUG - Inviter roles:", inviterRoles);
+  console.log("🔍 DEBUG - Target role:", targetRole.name);
   const isAdmin = inviterRoles.includes("admin");
+  const isStoreOwner = inviterRoles.includes("store_owner");
   const isStoreMgr = inviterRoles.includes("store_manager");
   const allowedForAdmin = ["store_manager", "inventory_manager", "cashier"];
+  const allowedForStoreOwner = [
+    "store_manager",
+    "inventory_manager",
+    "cashier",
+  ];
   const allowedForStoreMgr = ["inventory_manager", "cashier"];
-  const allowed = isAdmin
-    ? allowedForAdmin
-    : isStoreMgr
-    ? allowedForStoreMgr
-    : [];
+  const allowed =
+    isAdmin || isStoreOwner
+      ? allowedForStoreOwner
+      : isStoreMgr
+      ? allowedForStoreMgr
+      : [];
+  console.log("✅ DEBUG - Allowed roles:", allowed);
   if (!allowed.includes(targetRole.name)) {
     return res.status(403).json({ error: "Forbidden: role not assignable" });
   }

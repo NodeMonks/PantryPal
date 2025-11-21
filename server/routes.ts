@@ -80,6 +80,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Only admin and manager can delete products
+  app.delete(
+    "/api/products/:id",
+    isAuthenticated,
+    hasRole("admin", "store_manager"),
+    async (req, res) => {
+      try {
+        const product = await storage.deleteProduct(req.params.id);
+        if (!product) {
+          return res.status(404).json({ error: "Product not found" });
+        }
+        res.json({ message: "Product deleted successfully", product });
+      } catch (error) {
+        console.error("Error deleting product:", error);
+        res.status(500).json({ error: "Failed to delete product" });
+      }
+    }
+  );
+
   // Customers API - All authenticated users can view
   app.get("/api/customers", isAuthenticated, async (req, res) => {
     try {
@@ -201,7 +220,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  // Dashboard stats API - All authenticated users
+  // RBAC roles API - For invite functionality
+  app.get("/api/rbac/roles", isAuthenticated, async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { roles } = await import("../shared/schema");
+      const rolesList = await db.select().from(roles);
+      res.json(rolesList);
+    } catch (error) {
+      console.error("Error fetching roles:", error);
+      res.status(500).json({ error: "Failed to fetch roles" });
+    }
+  });
+
+  // Organization invite API - Session-based
+  app.post("/api/org/invite", isAuthenticated, async (req, res) => {
+    try {
+      console.log("📧 Invite request received");
+      console.log("👤 req.user:", req.user);
+
+      const { orgInvite } = await import("./controllers/authController");
+      const { db } = await import("./db");
+      const { user_roles, roles } = await import("../shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      // Get user's role name from database through user_roles junction table
+      const userId = (req.user as any)?.id;
+      console.log("🔍 User ID from session:", userId);
+
+      if (!userId) {
+        console.error("❌ No user ID in session");
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      // Query with proper integer comparison through user_roles table
+      const userResults = await db
+        .select({
+          roleName: roles.name,
+        })
+        .from(user_roles)
+        .innerJoin(roles, eq(user_roles.role_id, roles.id))
+        .where(eq(user_roles.user_id, userId))
+        .limit(1);
+
+      const userWithRole = userResults[0];
+      console.log("🔍 User role from DB:", userWithRole);
+
+      // Add user context from session
+      req.ctx = {
+        userId: (req.user as any)?.id,
+        orgId: (req.user as any)?.org_id,
+        roleId: (req.user as any)?.role_id,
+        roles: userWithRole ? [userWithRole.roleName] : [],
+      };
+      console.log("🔍 Request context:", req.ctx);
+      await orgInvite(req, res);
+    } catch (error: any) {
+      console.error("❌ Error sending invite:", error);
+      console.error("Stack:", error.stack);
+      res
+        .status(500)
+        .json({ error: "Failed to send invite", details: error.message });
+    }
+  }); // Dashboard stats API - All authenticated users
   app.get("/api/dashboard/stats", isAuthenticated, async (req, res) => {
     try {
       const products = await storage.getProducts();

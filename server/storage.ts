@@ -1,9 +1,23 @@
 import { db } from "./db";
-import { 
-  users, products, customers, bills, bill_items, inventory_transactions,
-  type User, type InsertUser, type Product, type InsertProduct,
-  type Customer, type InsertCustomer, type Bill, type InsertBill,
-  type BillItem, type InsertBillItem, type InventoryTransaction, type InsertInventoryTransaction
+import {
+  users,
+  products,
+  customers,
+  bills,
+  bill_items,
+  inventory_transactions,
+  type User,
+  type InsertUser,
+  type Product,
+  type InsertProduct,
+  type Customer,
+  type InsertCustomer,
+  type Bill,
+  type InsertBill,
+  type BillItem,
+  type InsertBillItem,
+  type InventoryTransaction,
+  type InsertInventoryTransaction,
 } from "@shared/schema";
 import { eq, desc, gte, lt, and } from "drizzle-orm";
 import { sql } from "drizzle-orm";
@@ -13,42 +27,56 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  
+
   // Product methods
   getProducts(): Promise<Product[]>;
   getProduct(id: string): Promise<Product | undefined>;
   createProduct(product: InsertProduct): Promise<Product>;
-  updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined>;
-  
+  updateProduct(
+    id: string,
+    product: Partial<InsertProduct>
+  ): Promise<Product | undefined>;
+  deleteProduct(id: string): Promise<Product | undefined>;
+
   // Customer methods
   getCustomers(): Promise<Customer[]>;
   getCustomer(id: string): Promise<Customer | undefined>;
   createCustomer(customer: InsertCustomer): Promise<Customer>;
-  
+
   // Bill methods
   getBills(): Promise<Bill[]>;
   getBillsForToday(): Promise<Bill[]>;
   getBill(id: string): Promise<Bill | undefined>;
   createBill(bill: InsertBill): Promise<Bill>;
-  
+
   // Bill item methods
   getBillItems(billId: string): Promise<BillItem[]>;
   createBillItem(billItem: InsertBillItem): Promise<BillItem>;
-  
+
   // Inventory transaction methods
   getInventoryTransactions(productId?: string): Promise<InventoryTransaction[]>;
-  createInventoryTransaction(transaction: InsertInventoryTransaction): Promise<InventoryTransaction>;
+  createInventoryTransaction(
+    transaction: InsertInventoryTransaction
+  ): Promise<InventoryTransaction>;
 }
 
 export class DrizzleStorage implements IStorage {
   // User methods
   async getUser(id: number): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    const result = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
     return result[0];
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    const result = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, username))
+      .limit(1);
     return result[0];
   }
 
@@ -63,7 +91,11 @@ export class DrizzleStorage implements IStorage {
   }
 
   async getProduct(id: string): Promise<Product | undefined> {
-    const result = await db.select().from(products).where(eq(products.id, id)).limit(1);
+    const result = await db
+      .select()
+      .from(products)
+      .where(eq(products.id, id))
+      .limit(1);
     return result[0];
   }
 
@@ -72,8 +104,23 @@ export class DrizzleStorage implements IStorage {
     return result[0];
   }
 
-  async updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product | undefined> {
-    const result = await db.update(products).set(product).where(eq(products.id, id)).returning();
+  async updateProduct(
+    id: string,
+    product: Partial<InsertProduct>
+  ): Promise<Product | undefined> {
+    const result = await db
+      .update(products)
+      .set(product)
+      .where(eq(products.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteProduct(id: string): Promise<Product | undefined> {
+    const result = await db
+      .delete(products)
+      .where(eq(products.id, id))
+      .returning();
     return result[0];
   }
 
@@ -83,7 +130,11 @@ export class DrizzleStorage implements IStorage {
   }
 
   async getCustomer(id: string): Promise<Customer | undefined> {
-    const result = await db.select().from(customers).where(eq(customers.id, id)).limit(1);
+    const result = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.id, id))
+      .limit(1);
     return result[0];
   }
 
@@ -99,19 +150,32 @@ export class DrizzleStorage implements IStorage {
 
   async getBillsForToday(): Promise<Bill[]> {
     const today = new Date();
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
-    
-    return await db.select().from(bills)
-      .where(and(
-        gte(bills.created_at, startOfDay),
-        lt(bills.created_at, endOfDay)
-      ))
+    const startOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    );
+    const endOfDay = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + 1
+    );
+
+    return await db
+      .select()
+      .from(bills)
+      .where(
+        and(gte(bills.created_at, startOfDay), lt(bills.created_at, endOfDay))
+      )
       .orderBy(desc(bills.created_at));
   }
 
   async getBill(id: string): Promise<Bill | undefined> {
-    const result = await db.select().from(bills).where(eq(bills.id, id)).limit(1);
+    const result = await db
+      .select()
+      .from(bills)
+      .where(eq(bills.id, id))
+      .limit(1);
     return result[0];
   }
 
@@ -122,7 +186,10 @@ export class DrizzleStorage implements IStorage {
 
   // Bill item methods
   async getBillItems(billId: string): Promise<BillItem[]> {
-    return await db.select().from(bill_items).where(eq(bill_items.bill_id, billId));
+    return await db
+      .select()
+      .from(bill_items)
+      .where(eq(bill_items.bill_id, billId));
   }
 
   async createBillItem(billItem: InsertBillItem): Promise<BillItem> {
@@ -131,18 +198,29 @@ export class DrizzleStorage implements IStorage {
   }
 
   // Inventory transaction methods
-  async getInventoryTransactions(productId?: string): Promise<InventoryTransaction[]> {
+  async getInventoryTransactions(
+    productId?: string
+  ): Promise<InventoryTransaction[]> {
     if (productId) {
-      return await db.select().from(inventory_transactions)
+      return await db
+        .select()
+        .from(inventory_transactions)
         .where(eq(inventory_transactions.product_id, productId))
         .orderBy(desc(inventory_transactions.created_at));
     }
-    return await db.select().from(inventory_transactions)
+    return await db
+      .select()
+      .from(inventory_transactions)
       .orderBy(desc(inventory_transactions.created_at));
   }
 
-  async createInventoryTransaction(transaction: InsertInventoryTransaction): Promise<InventoryTransaction> {
-    const result = await db.insert(inventory_transactions).values(transaction).returning();
+  async createInventoryTransaction(
+    transaction: InsertInventoryTransaction
+  ): Promise<InventoryTransaction> {
+    const result = await db
+      .insert(inventory_transactions)
+      .values(transaction)
+      .returning();
     return result[0];
   }
 }

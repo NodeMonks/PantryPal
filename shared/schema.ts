@@ -95,7 +95,7 @@ export const bill_items = pgTable("bill_items", {
     .references(() => bills.id, { onDelete: "cascade" })
     .notNull(),
   product_id: uuid("product_id")
-    .references(() => products.id)
+    .references(() => products.id, { onDelete: "cascade" })
     .notNull(),
   quantity: integer("quantity").notNull(),
   unit_price: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
@@ -108,7 +108,7 @@ export const inventory_transactions = pgTable("inventory_transactions", {
     .primaryKey()
     .default(sql`gen_random_uuid()`),
   product_id: uuid("product_id")
-    .references(() => products.id)
+    .references(() => products.id, { onDelete: "cascade" })
     .notNull(),
   transaction_type: text("transaction_type").notNull(), // 'in', 'out', 'adjustment'
   quantity: integer("quantity").notNull(),
