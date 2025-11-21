@@ -169,15 +169,26 @@ export function AppSidebar() {
                 </p>
               </div>
             </div>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleLogout}
-              className="w-full justify-start bg-white hover:bg-orange-300 text-black"
-            >
-              <LogOut className="h-4 w-4 mr-2 text-black" />
-              Logout
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate("/profile")}
+                className="justify-start border-orange-500/40 hover:bg-orange-500/10 text-black"
+              >
+                <UserIcon className="h-4 w-4 mr-2 text-orange-600" />
+                Profile
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleLogout}
+                className="justify-start bg-orange-300 hover:bg-orange-700 text-black"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </Button>
+            </div>
           </div>
         )}
         {isCollapsed && user && (
@@ -189,6 +200,15 @@ export function AppSidebar() {
               title={user.full_name || user.username}
             >
               <UserIcon className="h-5 w-5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => navigate("/profile")}
+              className="w-full h-10 border-orange-500/50 hover:bg-orange-500/10"
+              title="Profile"
+            >
+              <UserIcon className="h-5 w-5 text-orange-600" />
             </Button>
             <Button
               variant="destructive"

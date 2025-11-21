@@ -19,6 +19,7 @@ import Customers from "./pages/Customers";
 import Reports from "./pages/Reports";
 import ExpiryAlerts from "./pages/ExpiryAlerts";
 import UserManagement from "./pages/UserManagement";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import { DashboardLayout } from "./components/layout/DashboardLayout";
 
@@ -152,6 +153,17 @@ const App = () => (
                 <ProtectedRoute roles={["admin", "store_manager"]}>
                   <DashboardLayout>
                     <UserManagement />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <Profile />
                   </DashboardLayout>
                 </ProtectedRoute>
               }
