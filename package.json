@@ -18,7 +18,10 @@
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",
-    "docker:dev": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up"
+    "docker:dev": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up",
+    "docker:tag": "docker tag pantrypal-app:latest shubh2047/pantrypal:latest && docker tag pantrypal-app:latest shubh2047/pantrypal:v1.0.0",
+    "docker:push": "docker push shubh2047/pantrypal:latest && docker push shubh2047/pantrypal:v1.0.0",
+    "docker:publish": "npm run docker:build && npm run docker:tag && npm run docker:push"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -63,6 +63,8 @@ export function setupAuthRoutes(app: Express) {
 
   // Login
   app.post("/api/auth/login", (req, res, next) => {
+    const preSessionId = (req as any).sessionID;
+    console.log("[AUTH] Incoming login, sessionID before auth:", preSessionId);
     try {
       loginSchema.parse(req.body);
     } catch (error: any) {
@@ -87,10 +89,16 @@ export function setupAuthRoutes(app: Express) {
         if (err) {
           return res.status(500).json({ error: "Login failed" });
         }
-
+        const postSessionId = (req as any).sessionID;
+        console.log(
+          "[AUTH] Login successful, sessionID after auth:",
+          postSessionId
+        );
+        console.log("[AUTH] Cookie settings:", req.session?.cookie);
         res.json({
           message: "Login successful",
           user,
+          sessionId: postSessionId,
         });
       });
     })(req, res, next);
@@ -108,7 +116,21 @@ export function setupAuthRoutes(app: Express) {
 
   // Get current user
   app.get("/api/auth/me", isAuthenticated, (req, res) => {
-    res.json({ user: req.user });
+    const sid = (req as any).sessionID;
+    res.json({ user: req.user, sessionId: sid });
+  });
+
+  // Debug session route
+  app.get("/api/auth/debug-session", (req, res) => {
+    res.json({
+      isAuthenticated: req.isAuthenticated?.() || false,
+      sessionId: (req as any).sessionID,
+      session: {
+        cookie: req.session?.cookie,
+        data: req.session,
+      },
+      user: req.user || null,
+    });
   });
 
   // Get current org id for the logged-in (session) user

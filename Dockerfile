@@ -1,21 +1,23 @@
 # Multi-stage build for PantryPal
 # Stage 1: Build frontend and backend
-FROM node:20-bullseye AS builder
+FROM node:20-alpine AS builder
 
 # Install build tools for native dependencies (bcrypt, bufferutil)
-RUN apt-get update && apt-get install -y \
+RUN apk add --no-cache \
     python3 \
     make \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
+    g++
 
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package*.json package-lock.json ./
 
 # Install ALL dependencies (including devDependencies needed for build)
-RUN npm ci
+# Use longer timeout for slow networks
+RUN npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm ci || npm ci || npm install
 
 # Copy source code
 COPY . .
@@ -26,22 +28,24 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Production runtime
-FROM node:20-bullseye-slim
+FROM node:20-alpine
 
 # Install only runtime dependencies for native modules
-RUN apt-get update && apt-get install -y \
+RUN apk add --no-cache \
     python3 \
     make \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
+    g++
 
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package*.json package-lock.json ./
 
-# Install ONLY production dependencies
-RUN npm ci --only=production
+# Install ALL dependencies (production mode needs some dev deps like vite)
+# Use longer timeout and retry for slow networks
+RUN npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm ci || npm ci || npm install
 
 # Copy built artifacts from builder
 COPY --from=builder /app/dist ./dist
@@ -50,8 +54,8 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/drizzle.config.ts ./
 COPY --from=builder /app/shared ./shared
 
-# Create non-root user for security
-RUN groupadd -r pantrypal && useradd -r -g pantrypal pantrypal
+# Create non-root user for security (Alpine Linux commands)
+RUN addgroup -S pantrypal && adduser -S -G pantrypal pantrypal
 RUN chown -R pantrypal:pantrypal /app
 USER pantrypal
 

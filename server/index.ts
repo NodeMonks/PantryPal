@@ -4,14 +4,27 @@ import { setupVite, serveStatic, log } from "./vite";
 import { setupAuth } from "./auth";
 import { setupAuthRoutes } from "./authRoutes";
 import dotenv from "dotenv";
+import path from "path";
 import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { registerJwtRoutes } from "./routes.jwt";
 
-dotenv.config();
+// Load environment-specific .env file
+const envFile =
+  process.env.NODE_ENV === "production" ? ".env.production" : ".env";
+dotenv.config({ path: path.resolve(process.cwd(), envFile) });
+
+console.log(`📋 Loading environment from: ${envFile}`);
+console.log(`🌍 NODE_ENV: ${process.env.NODE_ENV}`);
+console.log(`🔐 SESSION_SECURE: ${process.env.SESSION_SECURE}`);
+console.log(`🍪 SESSION_SAME_SITE: ${process.env.SESSION_SAME_SITE}`);
 
 const app = express();
+
+// Trust proxy for proper session handling
+app.set("trust proxy", 1);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 

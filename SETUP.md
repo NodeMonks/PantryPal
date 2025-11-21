@@ -23,8 +23,13 @@ cd PantryPal
 # Install dependencies
 npm install
 
-# Copy environment template
-cp .env.docker .env
+# Copy environment template (choose based on your setup)
+cp env-examples/.env.development.example .env
+# OR for Docker: cp env-examples/.env.docker.example .env
+# OR for production: cp env-examples/.env.production.example .env
+
+# Edit .env with your actual values
+nano .env
 
 # Apply database schema
 npm run db:push
@@ -45,54 +50,38 @@ Development server runs at: **http://localhost:5000**
 
 ## Environment Variables
 
-Create a `.env` file in the project root with the following variables:
+PantryPal provides comprehensive environment templates for different scenarios in the `env-examples/` folder:
 
-### Database
+| Template                   | Purpose                                       |
+| -------------------------- | --------------------------------------------- |
+| `.env.development.example` | Local development with hot reload             |
+| `.env.production.example`  | Production deployment with security hardening |
+| `.env.test.example`        | Automated testing (Vitest, Playwright)        |
+| `.env.docker.example`      | Docker containerized deployments              |
 
-```env
-DATABASE_URL=postgresql://user:password@host:port/db
-```
-
-### Authentication
-
-```env
-SESSION_SECRET=replace-with-strong-random-string
-JWT_ACCESS_SECRET=access-secret-key
-JWT_REFRESH_SECRET=refresh-secret-key
-```
-
-### Application
-
-```env
-APP_BASE_URL=http://localhost:5000
-PORT=5000
-HOST=127.0.0.1
-NODE_ENV=development
-```
-
-### Email (Nodemailer)
-
-```env
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-app-password
-```
-
-### SMS (Twilio - Optional)
-
-```env
-TWILIO_ACCOUNT_SID=your-account-sid
-TWILIO_AUTH_TOKEN=your-auth-token
-TWILIO_PHONE_NUMBER=+1234567890
-```
-
-### Generating Secure Secrets
+### Quick Setup
 
 ```bash
-# Generate random 32-byte hex string
+# Copy appropriate template
+cp env-examples/.env.development.example .env
+
+# Generate secure secrets
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# Edit with your values
+nano .env
 ```
+
+### Required Variables
+
+- `DATABASE_URL` - PostgreSQL connection string
+- `SESSION_SECRET` - Session encryption key (min 32 chars)
+- `JWT_ACCESS_SECRET` - JWT access token secret
+- `JWT_REFRESH_SECRET` - JWT refresh token secret
+- `APP_BASE_URL` - Application base URL
+- Email configuration (SMTP host, port, credentials)
+
+📖 **For detailed environment configuration, see [env-examples/README.md](./env-examples/README.md)**
 
 ---
 

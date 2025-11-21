@@ -7,6 +7,7 @@ import type { Express } from "express";
 import session from "express-session";
 import createMemoryStore from "memorystore";
 import bcrypt from "bcrypt";
+import { env, isProduction } from "./config/env";
 
 const SALT_ROUNDS = 10;
 
@@ -83,24 +84,32 @@ passport.deserializeUser(async (id: number, done) => {
 // Setup authentication middleware
 export function setupAuth(app: Express) {
   const MemoryStore = createMemoryStore(session);
-  const isProduction = process.env.NODE_ENV === "production";
+  // Determine if we should mark cookies as secure:
+  // Use validated env var SESSION_SECURE but automatically disable on localhost/127.0.0.1 when not behind HTTPS.
+  const host = process.env.HOST || "127.0.0.1";
+  const runningOnLocalHost = /^(localhost|127\.0\.0\.1)$/.test(host);
+  const secureCookie = env.SESSION_SECURE && !runningOnLocalHost;
+  const sameSite = env.SESSION_SAME_SITE;
 
   // Session middleware
   app.use(
     session({
-      secret:
-        process.env.SESSION_SECRET || "pantrypal-secret-change-in-production",
+      secret: env.SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
       store: new MemoryStore({
-        checkPeriod: 86400000, // prune expired entries every 24h
+        checkPeriod: 86400000,
       }),
       cookie: {
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        httpOnly: true, // Prevents client-side JS from accessing the cookie
-        secure: isProduction, // Requires HTTPS in production
-        sameSite: isProduction ? "strict" : "lax", // CSRF protection
-        ...(isProduction && { domain: process.env.COOKIE_DOMAIN }), // Set domain in production
+        maxAge: Number(env.SESSION_MAX_AGE) || 24 * 60 * 60 * 1000,
+        httpOnly: env.SESSION_HTTP_ONLY,
+        secure: secureCookie,
+        sameSite: sameSite,
+        ...(isProduction &&
+          env.SESSION_SECURE &&
+          env.SESSION_SAME_SITE === "none" && { secure: true }),
+        ...(isProduction &&
+          process.env.COOKIE_DOMAIN && { domain: process.env.COOKIE_DOMAIN }),
       },
     })
   );
