@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import {
   Eye,
@@ -227,13 +227,7 @@ export default function Login() {
 
           <div className="text-center space-y-4">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Don't have an account?{" "}
-              <Link
-                to="/register"
-                className="font-semibold text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 transition-colors"
-              >
-                Create account
-              </Link>
+              Need access? Ask an existing administrator to invite you.
             </p>
 
             {/* Demo Credentials */}

@@ -42,11 +42,17 @@ export const products = pgTable("products", {
   id: uuid("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
+  org_id: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  store_id: uuid("store_id")
+    .notNull()
+    .references(() => stores.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   category: text("category").notNull(),
   brand: text("brand"),
-  barcode: text("barcode").unique(),
-  qr_code: text("qr_code").unique(),
+  barcode: text("barcode"),
+  qr_code: text("qr_code"),
   mrp: decimal("mrp", { precision: 10, scale: 2 }).notNull(),
   buying_cost: decimal("buying_cost", { precision: 10, scale: 2 }).notNull(),
   manufacturing_date: date("manufacturing_date"),
@@ -63,6 +69,12 @@ export const customers = pgTable("customers", {
   id: uuid("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
+  org_id: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  store_id: uuid("store_id")
+    .notNull()
+    .references(() => stores.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   phone: text("phone"),
   email: text("email"),
@@ -74,6 +86,12 @@ export const bills = pgTable("bills", {
   id: uuid("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
+  org_id: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  store_id: uuid("store_id")
+    .notNull()
+    .references(() => stores.id, { onDelete: "cascade" }),
   bill_number: text("bill_number").notNull().unique(),
   customer_id: uuid("customer_id").references(() => customers.id),
   total_amount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
@@ -107,6 +125,12 @@ export const inventory_transactions = pgTable("inventory_transactions", {
   id: uuid("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
+  org_id: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  store_id: uuid("store_id")
+    .notNull()
+    .references(() => stores.id, { onDelete: "cascade" }),
   product_id: uuid("product_id")
     .references(() => products.id, { onDelete: "cascade" })
     .notNull(),
@@ -136,13 +160,83 @@ export const registerSchema = insertUserSchema.extend({
   role: z.enum(userRoleEnum).default("inventory_manager"),
 });
 
-export const insertProductSchema = createInsertSchema(products);
-export const insertCustomerSchema = createInsertSchema(customers);
-export const insertBillSchema = createInsertSchema(bills);
-export const insertBillItemSchema = createInsertSchema(bill_items);
+// Organization Registration (multi-step) schema
+export const organizationRegistrationSchema = z.object({
+  organization: z.object({
+    name: z
+      .string()
+      .min(2, "Organization name must be at least 2 characters")
+      .max(100, "Organization name must be at most 100 characters"),
+  }),
+  stores: z
+    .array(
+      z.object({
+        name: z
+          .string()
+          .min(2, "Store name must be at least 2 characters")
+          .max(100, "Store name must be at most 100 characters"),
+      })
+    )
+    .min(1, "At least one store is required")
+    .max(10, "Maximum of 10 stores allowed"),
+  admin: z.object({
+    username: z
+      .string()
+      .min(3, "Username must be at least 3 characters")
+      .max(50, "Username must be at most 50 characters"),
+    email: z.string().email("Invalid email address"),
+    password: z
+      .string()
+      .min(6, "Password must be at least 6 characters")
+      .max(100, "Password must be at most 100 characters"),
+    full_name: z
+      .string()
+      .min(2, "Full name must be at least 2 characters")
+      .max(100, "Full name must be at most 100 characters"),
+    phone: z
+      .string()
+      .optional()
+      .refine((val) => !val || /^\+?[0-9\-() ]{7,20}$/.test(val), {
+        message: "Invalid phone number format",
+      }),
+  }),
+});
+
+export type OrganizationRegistrationInput = z.infer<
+  typeof organizationRegistrationSchema
+>;
+
+export const insertProductSchema = createInsertSchema(products).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+  org_id: true,
+  store_id: true,
+});
+export const insertCustomerSchema = createInsertSchema(customers).omit({
+  id: true,
+  created_at: true,
+  org_id: true,
+  store_id: true,
+});
+export const insertBillSchema = createInsertSchema(bills).omit({
+  id: true,
+  created_at: true,
+  org_id: true,
+  store_id: true,
+});
+export const insertBillItemSchema = createInsertSchema(bill_items).omit({
+  id: true,
+  created_at: true,
+});
 export const insertInventoryTransactionSchema = createInsertSchema(
   inventory_transactions
-);
+).omit({
+  id: true,
+  created_at: true,
+  org_id: true,
+  store_id: true,
+});
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -307,6 +401,12 @@ export const inviteAcceptSchema = z.object({
     .string()
     .min(8, "Password must be at least 8 characters")
     .max(128),
+});
+
+export const onboardingTokenCreateSchema = z.object({
+  email: z.string().email(),
+  company_name: z.string().min(2).max(100),
+  expires_in_hours: z.number().int().min(1).max(168).default(72), // 3 days default
 });
 
 export type Organization = typeof organizations.$inferSelect;

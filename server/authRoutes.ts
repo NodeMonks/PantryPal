@@ -5,6 +5,7 @@ import { users } from "../shared/schema";
 import { user_roles } from "../shared/schema";
 import { eq } from "drizzle-orm";
 import { hashPassword, isAuthenticated, hasRole } from "./auth";
+import { requireOrgId } from "./middleware/tenantContext";
 import { registerSchema, loginSchema } from "../shared/schema";
 
 export function setupAuthRoutes(app: Express) {
@@ -56,6 +57,119 @@ export function setupAuthRoutes(app: Express) {
       console.error("Registration error:", error);
       res.status(400).json({
         error: "Registration failed",
+        details: error.message,
+      });
+    }
+  });
+
+  // Register organization + initial admin + stores
+  // Used by external microservice after payment/verification
+  app.post("/api/auth/register-organization", async (req, res) => {
+    const {
+      organizationRegistrationSchema,
+      organizations,
+      stores,
+      users,
+      user_roles,
+      roles,
+    } = await import("../shared/schema");
+    const { eq } = await import("drizzle-orm");
+    try {
+      const parsed = organizationRegistrationSchema.parse(req.body);
+
+      // Basic uniqueness checks for username/email
+      const existingUser = await db
+        .select()
+        .from(users)
+        .where(eq(users.username, parsed.admin.username))
+        .limit(1);
+      if (existingUser.length) {
+        return res.status(400).json({ error: "Username already exists" });
+      }
+      const existingEmail = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, parsed.admin.email))
+        .limit(1);
+      if (existingEmail.length) {
+        return res.status(400).json({ error: "Email already exists" });
+      }
+
+      // Create organization
+      const [org] = await db
+        .insert(organizations)
+        .values({ name: parsed.organization.name })
+        .returning();
+
+      // Create stores
+      const storeInserts = parsed.stores.map((s) => ({
+        name: s.name,
+        org_id: org.id,
+      }));
+      let createdStores: any[] = [];
+      if (storeInserts.length) {
+        createdStores = await db
+          .insert(stores)
+          .values(storeInserts)
+          .returning();
+      }
+
+      // Find store_owner role (fallback to admin if missing)
+      const storeOwnerRole = await db
+        .select()
+        .from(roles)
+        .where(eq(roles.name, "store_owner"))
+        .limit(1);
+      const adminRole = await db
+        .select()
+        .from(roles)
+        .where(eq(roles.name, "admin"))
+        .limit(1);
+      const chosenRole = storeOwnerRole[0] || adminRole[0];
+      if (!chosenRole) {
+        return res
+          .status(500)
+          .json({ error: "Required role not seeded (store_owner/admin)" });
+      }
+
+      // Create admin user
+      const hashedPassword = hashPassword(parsed.admin.password);
+      const [adminUser] = await db
+        .insert(users)
+        .values({
+          username: parsed.admin.username,
+          email: parsed.admin.email,
+          password: hashedPassword,
+          full_name: parsed.admin.full_name,
+          phone: parsed.admin.phone || null,
+          role: "admin",
+          is_active: true,
+        })
+        .returning();
+
+      // Link user to org & first store
+      const firstStore = createdStores[0];
+      await db.insert(user_roles).values({
+        user_id: adminUser.id,
+        org_id: org.id,
+        store_id: firstStore ? firstStore.id : null,
+        role_id: chosenRole.id,
+      });
+
+      res.status(201).json({
+        message: "Organization registered successfully",
+        organization: { id: org.id, name: org.name },
+        stores: createdStores.map((s) => ({ id: s.id, name: s.name })),
+        admin: {
+          id: adminUser.id,
+          username: adminUser.username,
+          email: adminUser.email,
+        },
+      });
+    } catch (error: any) {
+      console.error("Organization registration error:", error);
+      res.status(400).json({
+        error: "Organization registration failed",
         details: error.message,
       });
     }
@@ -151,15 +265,20 @@ export function setupAuthRoutes(app: Express) {
     }
   });
 
-  // Get all users (admin only)
+  // Get all users in the same organization (admin only)
   app.get(
     "/api/auth/users",
     isAuthenticated,
     hasRole("admin"),
     async (req, res) => {
       try {
-        const allUsers = await db
-          .select({
+        // Resolve organization ID from auth context (session or JWT)
+        const orgId = requireOrgId(req);
+
+        // Get all users who belong to the same organization
+        // by joining with user_roles table
+        const orgUsers = await db
+          .selectDistinct({
             id: users.id,
             username: users.username,
             email: users.email,
@@ -169,9 +288,11 @@ export function setupAuthRoutes(app: Express) {
             is_active: users.is_active,
             created_at: users.created_at,
           })
-          .from(users);
+          .from(users)
+          .innerJoin(user_roles, eq(user_roles.user_id, users.id))
+          .where(eq(user_roles.org_id, orgId));
 
-        res.json(allUsers);
+        res.json(orgUsers);
       } catch (error) {
         console.error("Error fetching users:", error);
         res.status(500).json({ error: "Failed to fetch users" });

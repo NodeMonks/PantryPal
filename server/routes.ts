@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { isAuthenticated, hasRole } from "./auth";
+import { requireOrgId, requireStoreId } from "./middleware/tenantContext";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -10,7 +11,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Products API - Different roles have different permissions
   app.get("/api/products", isAuthenticated, async (req, res) => {
     try {
-      const products = await storage.getProducts();
+      const orgId = requireOrgId(req);
+      const storeId = requireStoreId(req);
+      const products = await storage.getProducts({ orgId, storeId });
       res.json(products);
     } catch (error) {
       console.error("Error fetching products:", error);
@@ -20,7 +23,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/products/:id", isAuthenticated, async (req, res) => {
     try {
-      const product = await storage.getProduct(req.params.id);
+      const orgId = requireOrgId(req);
+      const storeId = requireStoreId(req);
+      const product = await storage.getProduct(req.params.id, {
+        orgId,
+        storeId,
+      });
       if (!product) {
         return res.status(404).json({ error: "Product not found" });
       }
@@ -38,6 +46,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     hasRole("admin", "store_manager"),
     async (req, res) => {
       try {
+        const orgId = requireOrgId(req);
+        const storeId = requireStoreId(req);
         // Convert empty date strings to null to avoid PostgreSQL errors
         const productData = {
           ...req.body,
@@ -45,7 +55,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           expiry_date: req.body.expiry_date || null,
         };
 
-        const product = await storage.createProduct(productData);
+        const product = await storage.createProduct(productData, {
+          orgId,
+          storeId,
+        });
         res.status(201).json(product);
       } catch (error) {
         console.error("Error creating product:", error);
@@ -61,6 +74,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     hasRole("admin", "store_manager"),
     async (req, res) => {
       try {
+        const orgId = requireOrgId(req);
+        const storeId = requireStoreId(req);
         // Convert empty date strings to null to avoid PostgreSQL errors
         const productData = {
           ...req.body,
@@ -68,7 +83,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           expiry_date: req.body.expiry_date || null,
         };
 
-        const product = await storage.updateProduct(req.params.id, productData);
+        const product = await storage.updateProduct(
+          req.params.id,
+          productData,
+          { orgId, storeId }
+        );
         if (!product) {
           return res.status(404).json({ error: "Product not found" });
         }
@@ -87,7 +106,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     hasRole("admin", "store_manager"),
     async (req, res) => {
       try {
-        const product = await storage.deleteProduct(req.params.id);
+        const orgId = requireOrgId(req);
+        const storeId = requireStoreId(req);
+        const product = await storage.deleteProduct(req.params.id, {
+          orgId,
+          storeId,
+        });
         if (!product) {
           return res.status(404).json({ error: "Product not found" });
         }
@@ -102,7 +126,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Customers API - All authenticated users can view
   app.get("/api/customers", isAuthenticated, async (req, res) => {
     try {
-      const customers = await storage.getCustomers();
+      const orgId = requireOrgId(req);
+      const storeId = requireStoreId(req);
+      const customers = await storage.getCustomers({ orgId, storeId });
       res.json(customers);
     } catch (error) {
       console.error("Error fetching customers:", error);
@@ -116,7 +142,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     hasRole("admin", "store_manager", "inventory_manager"),
     async (req, res) => {
       try {
-        const customer = await storage.createCustomer(req.body);
+        const orgId = requireOrgId(req);
+        const storeId = requireStoreId(req);
+        const customer = await storage.createCustomer(req.body, {
+          orgId,
+          storeId,
+        });
         res.status(201).json(customer);
       } catch (error) {
         console.error("Error creating customer:", error);
@@ -128,7 +159,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bills API - All authenticated users can view
   app.get("/api/bills", isAuthenticated, async (req, res) => {
     try {
-      const bills = await storage.getBills();
+      const orgId = requireOrgId(req);
+      const storeId = requireStoreId(req);
+      const bills = await storage.getBills({ orgId, storeId });
       res.json(bills);
     } catch (error) {
       console.error("Error fetching bills:", error);
@@ -138,7 +171,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/bills/today", isAuthenticated, async (req, res) => {
     try {
-      const bills = await storage.getBillsForToday();
+      const orgId = requireOrgId(req);
+      const storeId = requireStoreId(req);
+      const bills = await storage.getBillsForToday({ orgId, storeId });
       res.json(bills);
     } catch (error) {
       console.error("Error fetching today's bills:", error);
@@ -153,7 +188,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     hasRole("admin", "store_manager", "inventory_manager"),
     async (req, res) => {
       try {
-        const bill = await storage.createBill(req.body);
+        const orgId = requireOrgId(req);
+        const storeId = requireStoreId(req);
+        const bill = await storage.createBill(req.body, { orgId, storeId });
         res.status(201).json(bill);
       } catch (error) {
         console.error("Error creating bill:", error);
@@ -165,7 +202,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bill items API
   app.get("/api/bills/:billId/items", isAuthenticated, async (req, res) => {
     try {
-      const items = await storage.getBillItems(req.params.billId);
+      const orgId = requireOrgId(req);
+      const storeId = requireStoreId(req);
+      const items = await storage.getBillItems(req.params.billId, {
+        orgId,
+        storeId,
+      });
       res.json(items);
     } catch (error) {
       console.error("Error fetching bill items:", error);
@@ -179,10 +221,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     hasRole("admin", "store_manager", "inventory_manager"),
     async (req, res) => {
       try {
-        const item = await storage.createBillItem({
-          ...req.body,
-          bill_id: req.params.billId,
-        });
+        const orgId = requireOrgId(req);
+        const storeId = requireStoreId(req);
+        const item = await storage.createBillItem(
+          {
+            ...req.body,
+            bill_id: req.params.billId,
+          },
+          { orgId, storeId }
+        );
         res.status(201).json(item);
       } catch (error) {
         console.error("Error creating bill item:", error);
@@ -194,8 +241,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Inventory transactions API
   app.get("/api/inventory-transactions", isAuthenticated, async (req, res) => {
     try {
+      const orgId = requireOrgId(req);
+      const storeId = requireStoreId(req);
       const productId = req.query.product_id as string;
-      const transactions = await storage.getInventoryTransactions(productId);
+      const transactions = await storage.getInventoryTransactions(
+        { orgId, storeId },
+        productId
+      );
       res.json(transactions);
     } catch (error) {
       console.error("Error fetching inventory transactions:", error);
@@ -209,7 +261,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     hasRole("admin", "store_manager"),
     async (req, res) => {
       try {
-        const transaction = await storage.createInventoryTransaction(req.body);
+        const orgId = requireOrgId(req);
+        const storeId = requireStoreId(req);
+        const transaction = await storage.createInventoryTransaction(req.body, {
+          orgId,
+          storeId,
+        });
         res.status(201).json(transaction);
       } catch (error) {
         console.error("Error creating inventory transaction:", error);
@@ -285,10 +342,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }); // Dashboard stats API - All authenticated users
   app.get("/api/dashboard/stats", isAuthenticated, async (req, res) => {
     try {
-      const products = await storage.getProducts();
-      const todayBills = await storage.getBillsForToday();
-      const allBills = await storage.getBills();
-      const customers = await storage.getCustomers();
+      const orgId = requireOrgId(req);
+      const storeId = requireStoreId(req);
+      const products = await storage.getProducts({ orgId, storeId });
+      const todayBills = await storage.getBillsForToday({ orgId, storeId });
+      const allBills = await storage.getBills({ orgId, storeId });
+      const customers = await storage.getCustomers({ orgId, storeId });
 
       const lowStock = products.filter(
         (p) => (p.quantity_in_stock || 0) <= (p.min_stock_level || 0)
@@ -321,6 +380,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching dashboard stats:", error);
       res.status(500).json({ error: "Failed to fetch dashboard stats" });
+    }
+  });
+
+  // Get user's organization and store details
+  app.get("/api/profile/organization", isAuthenticated, async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { user_roles, organizations, stores, roles } = await import(
+        "../shared/schema"
+      );
+      const { eq } = await import("drizzle-orm");
+
+      const userId = (req.user as any)?.id;
+      if (!userId) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      // Get user's organization and store through user_roles
+      const userRoleData = await db
+        .select({
+          orgId: user_roles.org_id,
+          storeId: user_roles.store_id,
+          roleId: user_roles.role_id,
+          orgName: organizations.name,
+          orgCreatedAt: organizations.created_at,
+          storeName: stores.name,
+          storeCreatedAt: stores.created_at,
+          roleName: roles.name,
+        })
+        .from(user_roles)
+        .leftJoin(organizations, eq(user_roles.org_id, organizations.id))
+        .leftJoin(stores, eq(user_roles.store_id, stores.id))
+        .leftJoin(roles, eq(user_roles.role_id, roles.id))
+        .where(eq(user_roles.user_id, userId))
+        .limit(1);
+
+      if (!userRoleData.length) {
+        return res.status(404).json({ error: "Organization data not found" });
+      }
+
+      const data = userRoleData[0];
+
+      // Get all stores in the organization
+      const orgStores = await db
+        .select({
+          id: stores.id,
+          name: stores.name,
+          createdAt: stores.created_at,
+        })
+        .from(stores)
+        .where(eq(stores.org_id, data.orgId));
+
+      res.json({
+        organization: {
+          id: data.orgId,
+          name: data.orgName,
+          createdAt: data.orgCreatedAt,
+          totalStores: orgStores.length,
+        },
+        currentStore: data.storeId
+          ? {
+              id: data.storeId,
+              name: data.storeName,
+              createdAt: data.storeCreatedAt,
+            }
+          : null,
+        allStores: orgStores,
+        role: data.roleName,
+      });
+    } catch (error) {
+      console.error("Error fetching organization data:", error);
+      res.status(500).json({ error: "Failed to fetch organization data" });
     }
   });
 

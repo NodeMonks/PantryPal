@@ -1,7 +1,7 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { db } from "./db";
-import { users } from "../shared/schema";
+import { users, user_roles, stores } from "../shared/schema";
 import { eq } from "drizzle-orm";
 import type { Express } from "express";
 import session from "express-session";
@@ -74,9 +74,48 @@ passport.deserializeUser(async (id: number, done) => {
       return done(null, false);
     }
 
+    // Fetch organization and store assignments
+    const [assignment] = await db
+      .select()
+      .from(user_roles)
+      .where(eq(user_roles.user_id, user.id))
+      .limit(1);
+
     const { password: _, ...userWithoutPassword } = user;
-    done(null, userWithoutPassword);
+
+    // Determine default store when user has org assignment but no store assignment
+    let derivedStoreId: string | undefined = assignment?.store_id || undefined;
+    if (assignment?.org_id && !derivedStoreId) {
+      try {
+        const [defaultStore] = await db
+          .select()
+          .from(stores)
+          .where(eq(stores.org_id, assignment.org_id))
+          .limit(1);
+        derivedStoreId = defaultStore?.id;
+      } catch (e) {
+        // swallow; we'll proceed without a storeId if lookup fails
+      }
+    }
+
+    // Attach org and store context to user object
+    const userWithContext = {
+      ...userWithoutPassword,
+      orgId: assignment?.org_id,
+      storeId: derivedStoreId,
+    };
+
+    console.log("[AUTH] Deserialized user:", {
+      id: userWithContext.id,
+      username: userWithContext.username,
+      orgId: userWithContext.orgId,
+      storeId: userWithContext.storeId,
+      hasAssignment: !!assignment,
+    });
+
+    done(null, userWithContext);
   } catch (error) {
+    console.error("[AUTH] Error deserializing user:", error);
     done(error);
   }
 });

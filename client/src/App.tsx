@@ -7,7 +7,6 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
-import Register from "./pages/Register";
 import InviteAccept from "./pages/InviteAccept";
 import OrgInvite from "./pages/OrgInvite";
 import Inventory from "./pages/Inventory";
@@ -35,7 +34,6 @@ const App = () => (
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
             <Route path="/invite/accept" element={<InviteAccept />} />
             <Route path="/org/invite" element={<OrgInvite />} />
 
