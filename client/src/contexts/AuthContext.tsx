@@ -44,9 +44,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.ok) {
         const data = await response.json();
         setUser(data.user);
+        // Cache user data in session storage for quick access
+        sessionStorage.setItem("user", JSON.stringify(data.user));
+      } else {
+        // Clear cache if auth fails
+        sessionStorage.removeItem("user");
       }
     } catch (error) {
       console.error("Failed to fetch user:", error);
+      // Try to restore from session storage if network error
+      const cachedUser = sessionStorage.getItem("user");
+      if (cachedUser) {
+        try {
+          setUser(JSON.parse(cachedUser));
+        } catch (e) {
+          console.error("Failed to parse cached user:", e);
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -63,6 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (response.ok) {
       const data = await response.json();
       setUser(data.user);
+      // Cache user data in session storage
+      sessionStorage.setItem("user", JSON.stringify(data.user));
     } else {
       const error = await response.json();
       throw new Error(error.error || "Login failed");
@@ -76,8 +92,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         credentials: "include",
       });
       setUser(null);
+      // Clear session storage on logout
+      sessionStorage.removeItem("user");
     } catch (error) {
       console.error("Logout error:", error);
+      // Still clear user state and cache even if request fails
+      setUser(null);
+      sessionStorage.removeItem("user");
     }
   };
 

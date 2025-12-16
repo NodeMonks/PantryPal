@@ -66,6 +66,21 @@ ADD CONSTRAINT inventory_transactions_store_id_fkey
 (id) ON
 DELETE CASCADE;
 
+ALTER TABLE products ADD CONSTRAINT products_check_stock CHECK (quantity_in_stock >= 0);
+ALTER TABLE products ADD CONSTRAINT products_check_price CHECK (mrp > 0 AND buying_cost > 0);
+ALTER TABLE bills ADD CONSTRAINT bills_check_amount CHECK (total_amount >= 0);
+
+-- Enforce uniqueness per org/store for identifiers
+ALTER TABLE products
+  ADD CONSTRAINT products_unique_barcode
+    UNIQUE (org_id, store_id, barcode)
+WHERE barcode IS NOT NULL;
+
+ALTER TABLE customers
+  ADD CONSTRAINT customers_unique_phone
+    UNIQUE (org_id, store_id, phone)
+WHERE phone IS NOT NULL;
+
 -- Optional: If you have existing data, you'll need to populate these columns
 -- Example for a single org/store setup:
 -- UPDATE products SET org_id = (SELECT id FROM organizations LIMIT 1), store_id = (SELECT id FROM stores LIMIT 1);

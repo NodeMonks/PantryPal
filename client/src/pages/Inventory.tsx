@@ -26,6 +26,8 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { api, type Product } from "@/lib/api";
+import { cache, shouldEnableIndexedDb } from "@/lib/indexeddb";
+import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "react-router-dom";
 import {
   Plus,
@@ -48,6 +50,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export default function Inventory() {
+  const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -108,6 +111,18 @@ export default function Inventory() {
       setLoading(true);
       const products = await api.getProducts();
       setProducts(products);
+      // Cache in IndexedDB for prod environment
+      if (shouldEnableIndexedDb() && user?.org_id && user?.store_id) {
+        const items = products.map((p) => ({
+          id: p.id,
+          orgId: user.org_id,
+          storeId: user.store_id,
+          name: p.name,
+          barcode: p.barcode ?? null,
+          updatedAt: Date.now(),
+        }));
+        cache.putProducts(items).catch(() => {});
+      }
     } catch (error) {
       console.error("Error loading products:", error);
       toast({

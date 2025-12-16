@@ -122,7 +122,12 @@ const envSchema = z.object({
   DB_LOGGING: z
     .string()
     .transform((val) => val === "true")
-    .default("false"),
+    .default("true"),
+  SLOW_QUERY_THRESHOLD_MS: z
+    .string()
+    .transform(Number)
+    .pipe(z.number().int().positive())
+    .default("300"),
   SILENT_LOGS: z
     .string()
     .transform((val) => val === "true")
@@ -131,7 +136,7 @@ const envSchema = z.object({
   // Redis (Optional - for session store)
   REDIS_URL: z.string().url().optional(),
   REDIS_PASSWORD: z.string().optional(),
-  SESSION_STORE: z.enum(["memory", "postgres", "redis"]).default("memory"),
+  SESSION_STORE: z.enum(["memory", "postgres", "redis"]).default("postgres"),
 
   // Monitoring (Optional)
   SENTRY_DSN: z.string().url().optional(),

@@ -1,17 +1,16 @@
 import { useState } from "react";
 import {
   Home,
-  Package,
+  ShoppingBasket,
   Receipt,
   QrCode,
+  Barcode,
   Users,
   BarChart3,
-  Settings,
-  ShoppingCart,
   AlertTriangle,
   LogOut,
   User as UserIcon,
-  Mail,
+  ShoppingCart,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,8 +34,9 @@ import { Separator } from "@/components/ui/separator";
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: Home },
-  { title: "Inventory", url: "/inventory", icon: Package },
+  { title: "Inventory", url: "/inventory", icon: ShoppingBasket },
   { title: "Billing", url: "/billing", icon: Receipt },
+  { title: "Barcode Scanner", url: "/barcode-scanner", icon: Barcode },
   { title: "QR Scanner", url: "/qr-scanner", icon: QrCode },
   { title: "Customers", url: "/customers", icon: Users },
   { title: "Reports", url: "/reports", icon: BarChart3 },
@@ -45,8 +45,8 @@ const menuItems = [
 ];
 
 const quickActions = [
-  { title: "New Bill", url: "/billing/new", icon: ShoppingCart },
-  { title: "Add Product", url: "/inventory/add", icon: Package },
+  { title: "New Bill", url: "/billing/new", icon: Receipt },
+  { title: "Add Product", url: "/inventory/add", icon: ShoppingBasket },
 ];
 
 export function AppSidebar() {
@@ -83,22 +83,24 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="p-4 border-b border-sidebar-border">
+      <SidebarHeader className="p-3 border-b border-sidebar-border flex items-center justify-center min-h-[60px]">
         {!isCollapsed ? (
-          <div className="flex items-center gap-3 text-sidebar-foreground">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-600 text-white">
-              <Package className="h-6 w-6" />
+          <div className="flex items-center gap-2 text-sidebar-foreground w-full">
+            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-orange-600 text-white">
+              <ShoppingBasket className="h-5 w-5" />
             </div>
-            <div>
-              <h2 className="text-lg font-bold">Pantry Pal</h2>
-              <p className="text-xs text-sidebar-foreground/70">
-                Grocery Management
+            <div className="flex-1 min-w-0">
+              <h2 className="text-base font-bold truncate leading-tight">
+                Pantry Pal
+              </h2>
+              <p className="text-xs text-sidebar-foreground/70 truncate">
+                Inventory
               </p>
             </div>
           </div>
         ) : (
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-600 text-white mx-auto">
-            <Package className="h-6 w-6" />
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-orange-600 text-white">
+            <ShoppingBasket className="h-5 w-5" />
           </div>
         )}
       </SidebarHeader>
@@ -118,11 +120,17 @@ export function AppSidebar() {
                   return !item.adminOnly || hasRole("admin");
                 })
                 .map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild>
+                  <SidebarMenuItem key={item.title} className="h-9">
+                    <SidebarMenuButton
+                      asChild
+                      className={`h-9 ${isCollapsed ? "px-2" : ""}`}
+                      title={isCollapsed ? item.title : undefined}
+                    >
                       <NavLink to={item.url} end className={getNavCls}>
-                        <item.icon className="h-4 w-4" />
-                        {!isCollapsed && <span>{item.title}</span>}
+                        <item.icon className="h-4 w-4 flex-shrink-0" />
+                        {!isCollapsed && (
+                          <span className="truncate text-sm">{item.title}</span>
+                        )}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -139,11 +147,17 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {filteredQuickActions.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild>
-                      <NavLink to={item.url} className={getNavCls}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
+                  <SidebarMenuItem key={item.title} className="h-9">
+                    <SidebarMenuButton
+                      asChild
+                      className="h-9"
+                      title={isCollapsed ? item.title : undefined}
+                    >
+                      <NavLink to={item.url} end className={getNavCls}>
+                        <item.icon className="h-4 w-4 flex-shrink-0" />
+                        {!isCollapsed && (
+                          <span className="truncate text-sm">{item.title}</span>
+                        )}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -154,18 +168,18 @@ export function AppSidebar() {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t border-sidebar-border">
+      <SidebarFooter className="p-3 border-t border-sidebar-border min-h-[70px] flex items-end">
         {!isCollapsed && user && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-3 p-2 rounded-lg bg-sidebar-accent/50">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-600 text-white">
-                <UserIcon className="h-5 w-5" />
+          <div className="space-y-2 w-full">
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-sidebar-accent/50">
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-orange-600 text-white">
+                <UserIcon className="h-4 w-4" />
               </div>
-              <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-semibold text-sidebar-foreground truncate">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-sidebar-foreground truncate">
                   {user.full_name || user.username}
                 </p>
-                <p className="text-xs text-sidebar-foreground/60 capitalize">
+                <p className="text-xs text-sidebar-foreground/60 capitalize truncate">
                   {user.role.replace(/_/g, " ")}
                 </p>
               </div>
@@ -175,50 +189,50 @@ export function AppSidebar() {
                 variant="outline"
                 size="sm"
                 onClick={() => navigate("/profile")}
-                className="justify-start border-orange-500/40 hover:bg-orange-500/10 text-black"
+                className="h-8 justify-start border-orange-500/40 hover:bg-orange-500/10 text-black text-xs"
               >
-                <UserIcon className="h-4 w-4 mr-2 text-orange-600" />
-                Profile
+                <UserIcon className="h-3 w-3 mr-1 flex-shrink-0 text-orange-600" />
+                <span className="truncate">Profile</span>
               </Button>
               <Button
                 variant="destructive"
                 size="sm"
                 onClick={handleLogout}
-                className="justify-start bg-orange-300 hover:bg-orange-700 text-black"
+                className="h-8 justify-start bg-orange-300 hover:bg-orange-700 text-black text-xs"
               >
-                <LogOut className="h-4 w-4 mr-2" />
-                Logout
+                <LogOut className="h-3 w-3 mr-1 flex-shrink-0" />
+                <span className="truncate">Logout</span>
               </Button>
             </div>
           </div>
         )}
         {isCollapsed && user && (
-          <div className="space-y-2">
+          <div className="space-y-2 w-full">
             <Button
               variant="ghost"
               size="icon"
-              className="w-full h-10 rounded-full bg-orange-600 hover:bg-orange-700 text-white"
+              className="h-8 w-8 rounded-full bg-orange-600 hover:bg-orange-700 text-white flex-shrink-0"
               title={user.full_name || user.username}
             >
-              <UserIcon className="h-5 w-5" />
+              <UserIcon className="h-4 w-4" />
             </Button>
             <Button
               variant="outline"
               size="icon"
               onClick={() => navigate("/profile")}
-              className="w-full h-10 border-orange-500/50 hover:bg-orange-500/10"
+              className="h-8 w-8 border-orange-500/50 hover:bg-orange-500/10 flex-shrink-0"
               title="Profile"
             >
-              <UserIcon className="h-5 w-5 text-orange-600" />
+              <UserIcon className="h-4 w-4 text-orange-600" />
             </Button>
             <Button
               variant="destructive"
               size="icon"
               onClick={handleLogout}
-              className="w-full h-10 bg-red-600 hover:bg-red-700 text-white"
+              className="h-8 w-8 bg-red-600 hover:bg-red-700 text-white flex-shrink-0"
               title="Logout"
             >
-              <LogOut className="h-5 w-5" />
+              <LogOut className="h-4 w-4" />
             </Button>
           </div>
         )}

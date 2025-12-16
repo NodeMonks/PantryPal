@@ -9,6 +9,11 @@ import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { registerJwtRoutes } from "./routes.jwt";
+import { db } from "./db";
+import { sessions } from "../shared/schema";
+import { lt } from "drizzle-orm";
+import * as Sentry from "@sentry/node";
+import { nodeProfilingIntegration } from "@sentry/profiling-node";
 
 // Load environment-specific .env file
 const envFile =
@@ -21,6 +26,30 @@ console.log(`🔐 SESSION_SECURE: ${process.env.SESSION_SECURE}`);
 console.log(`🍪 SESSION_SAME_SITE: ${process.env.SESSION_SAME_SITE}`);
 
 const app = express();
+
+// Initialize Sentry if DSN provided
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || "development",
+    integrations: [
+      // Enable performance instrumentation
+      nodeProfilingIntegration(),
+      new Sentry.Integrations.Http({ tracing: true }),
+    ],
+    tracesSampleRate: parseFloat(
+      process.env.SENTRY_TRACES_SAMPLE_RATE || "0.1"
+    ),
+    profilesSampleRate: parseFloat(
+      process.env.SENTRY_PROFILES_SAMPLE_RATE || "0.05"
+    ),
+  });
+
+  // Request handler must be the first middleware on the app
+  app.use(Sentry.Handlers.requestHandler());
+  // Tracing handler
+  app.use(Sentry.Handlers.tracingHandler());
+}
 
 // Trust proxy for proper session handling
 app.set("trust proxy", 1);
@@ -48,6 +77,24 @@ app.use(
 );
 app.use(cookieParser());
 
+const scheduleSessionCleanup = () => {
+  const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
+  const runCleanup = async () => {
+    try {
+      const now = new Date();
+      await db.delete(sessions).where(lt(sessions.expires_at, now));
+      log("🧹 Cleaned up expired sessions");
+    } catch (err) {
+      console.error("❌ Session cleanup failed", err);
+    }
+  };
+
+  // Run immediately and then on interval
+  runCleanup();
+  setInterval(runCleanup, CLEANUP_INTERVAL_MS);
+};
+
 // Setup authentication (must be before routes)
 setupAuth(app);
 
@@ -71,9 +118,19 @@ app.use((req, res, next) => {
 
   const server = await registerRoutes(app);
 
+  // Cleanup expired sessions periodically
+  scheduleSessionCleanup();
+
   // Global error handler
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || 500;
+    if (process.env.SENTRY_DSN) {
+      Sentry.captureException(err, {
+        level: status >= 500 ? "error" : "warning",
+        tags: { route: req.path },
+        extra: { method: req.method, status },
+      });
+    }
     res
       .status(status)
       .json({ message: err.message || "Internal Server Error" });
@@ -84,6 +141,11 @@ app.use((req, res, next) => {
     await setupVite(app, server);
   } else {
     serveStatic(app);
+  }
+
+  // Sentry error handler should be after all routes and middleware
+  if (process.env.SENTRY_DSN) {
+    app.use(Sentry.Handlers.errorHandler());
   }
 
   // Use dynamic host/port
