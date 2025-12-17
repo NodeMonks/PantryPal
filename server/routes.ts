@@ -89,17 +89,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     hasRole("admin", "store_manager", "inventory_manager"),
     async (req, res) => {
       try {
-        const { id } = req.params;
-        const { quantity, operation } = req.body; // operation: 'set', 'add', 'subtract'
         const orgId = requireOrgId(req);
-
-        const product = await storage.getProduct(id, { orgId });
+        const product = await storage.deleteProduct(req.params.id, {
+          orgId,
+        });
         if (!product) {
           return res.status(404).json({ error: "Product not found" });
         }
+        res.json({ message: "Product deleted successfully", product });
 
-        let newQuantity = product.quantity_in_stock || 0;
-
+        // Handle FK violations gracefully: product referenced by bill_items
+        if (error?.code === "23503") {
+          return res.status(409).json({
+            error: "Product cannot be deleted",
+            details:
+              "This product is referenced in one or more bill items. Remove those references or archive the product instead.",
+          });
+        }
+        console.error("Error deleting product:", error);
+        res.status(500).json({ error: "Failed to delete product" });
         switch (operation) {
           case "set":
             newQuantity = quantity;
