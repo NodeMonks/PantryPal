@@ -263,6 +263,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Archive product (soft delete)
+  app.patch(
+    "/api/products/:id/archive",
+    isAuthenticated,
+    hasRole("admin", "store_manager"),
+    async (req, res) => {
+      try {
+        const orgId = requireOrgId(req);
+        const product = await storage.updateProduct(
+          req.params.id,
+          { is_active: false } as any,
+          { orgId }
+        );
+        if (!product) {
+          return res.status(404).json({ error: "Product not found" });
+        }
+        res.json({ message: "Product archived", product });
+      } catch (error) {
+        console.error("Error archiving product:", error);
+        res.status(500).json({ error: "Failed to archive product" });
+      }
+    }
+  );
+
+  // Unarchive product (restore)
+  app.patch(
+    "/api/products/:id/unarchive",
+    isAuthenticated,
+    hasRole("admin", "store_manager"),
+    async (req, res) => {
+      try {
+        const orgId = requireOrgId(req);
+        const product = await storage.updateProduct(
+          req.params.id,
+          { is_active: true } as any,
+          { orgId }
+        );
+        if (!product) {
+          return res.status(404).json({ error: "Product not found" });
+        }
+        res.json({ message: "Product restored", product });
+      } catch (error) {
+        console.error("Error restoring product:", error);
+        res.status(500).json({ error: "Failed to restore product" });
+      }
+    }
+  );
+
   // Customers API - All authenticated users can view
   app.get("/api/customers", isAuthenticated, async (req, res) => {
     try {
@@ -302,6 +350,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching bills:", error);
       res.status(500).json({ error: "Failed to fetch bills" });
+    }
+  });
+
+  // Scalable, paginated bills endpoint with keyset pagination
+  app.get("/api/bills/page", isAuthenticated, async (req, res) => {
+    try {
+      const orgId = requireOrgId(req);
+      const limit = Math.min(Number(req.query.limit) || 50, 200);
+      const cursorCreatedAt = req.query.cursorCreatedAt
+        ? new Date(String(req.query.cursorCreatedAt))
+        : undefined;
+      const cursorId = req.query.cursorId
+        ? String(req.query.cursorId)
+        : undefined;
+
+      const { db } = await import("./db");
+      const { bills } = await import("../shared/schema");
+      const { and, eq, or, lt } = await import("drizzle-orm");
+
+      const base = [eq(bills.org_id, orgId)];
+      if (cursorCreatedAt && cursorId) {
+        base.push(
+          or(
+            and(eq(bills.created_at, cursorCreatedAt), lt(bills.id, cursorId)),
+            lt(bills.created_at, cursorCreatedAt)
+          )
+        );
+      }
+
+      const rows = await db
+        .select()
+        .from(bills)
+        .where(and(...base))
+        .orderBy((bills as any).created_at, (bills as any).id)
+        .limit(limit);
+
+      const items = rows.reverse(); // ensure descending order for UI
+      const last = items[items.length - 1];
+      const nextCursor = last
+        ? { createdAt: last.created_at, id: last.id }
+        : null;
+
+      res.json({ items, nextCursor, limit });
+    } catch (error) {
+      console.error("Error fetching paged bills:", error);
+      res.status(500).json({ error: "Failed to fetch paged bills" });
     }
   });
 

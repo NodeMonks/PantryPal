@@ -105,7 +105,12 @@ export class DrizzleStorage implements IStorage {
     return await db
       .select()
       .from(products)
-      .where(eq(products.org_id, ctx.orgId))
+      .where(
+        and(
+          eq(products.org_id, ctx.orgId),
+          eq((products as any).is_active, true)
+        )
+      )
       .orderBy(products.name);
   }
 

@@ -58,6 +58,7 @@ export const products = pgTable("products", {
   quantity_in_stock: integer("quantity_in_stock").default(0),
   min_stock_level: integer("min_stock_level").default(5),
   unit: text("unit").default("piece"),
+  is_active: boolean("is_active").notNull().default(true),
   description: text("description"),
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow(),
