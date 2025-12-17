@@ -1,7 +1,7 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { db } from "./db";
-import { users, user_roles, stores } from "../shared/schema";
+import { users, user_roles, stores, organizations, roles } from "../shared/schema";
 import { eq } from "drizzle-orm";
 import type { Express } from "express";
 import session from "express-session";
@@ -10,6 +10,79 @@ import bcrypt from "bcrypt";
 import { env, isProduction } from "./config/env";
 
 const SALT_ROUNDS = 10;
+
+// Ensure a user has org/store assignment; create defaults if missing
+async function ensureAssignment(user: any, assignments: any[]) {
+  let assignment = assignments[0];
+
+  // If assignment already has org + store, return it
+  if (assignment?.org_id && assignment?.store_id) {
+    return { orgId: assignment.org_id, storeId: assignment.store_id };
+  }
+
+  let orgId = assignment?.org_id as string | undefined;
+  let storeId = assignment?.store_id as string | undefined;
+
+  // Ensure an org exists
+  if (!orgId) {
+    const [org] = await db.select().from(organizations).limit(1);
+    if (org) {
+      orgId = org.id;
+    } else {
+      const [newOrg] = await db
+        .insert(organizations)
+        .values({ name: "Default Organization" })
+        .returning();
+      orgId = newOrg.id;
+    }
+  }
+
+  // Ensure a store exists for that org
+  if (!storeId && orgId) {
+    const [store] = await db
+      .select()
+      .from(stores)
+      .where(eq(stores.org_id, orgId))
+      .limit(1);
+
+    if (store) {
+      storeId = store.id;
+    } else {
+      const [newStore] = await db
+        .insert(stores)
+        .values({ org_id: orgId, name: "Default Store" })
+        .returning();
+      storeId = newStore.id;
+    }
+  }
+
+  // Ensure a user_roles row exists with role mapping
+  if (orgId && storeId) {
+    try {
+      const [roleRow] = await db
+        .select()
+        .from(roles)
+        .where(eq(roles.name, user.role))
+        .limit(1);
+
+      if (roleRow) {
+        await db
+          .insert(user_roles)
+          .values({
+            user_id: user.id,
+            org_id: orgId,
+            store_id: storeId,
+            role_id: roleRow.id,
+          })
+          .onConflictDoNothing();
+      }
+    } catch (e) {
+      // best-effort; do not block login if insert collides
+    }
+  }
+
+  return { orgId, storeId };
+}
 
 // Verify password using bcrypt
 function verifyPassword(
@@ -86,30 +159,15 @@ passport.deserializeUser(async (id: number, done) => {
       JSON.stringify(assignments, null, 2)
     );
 
-    const assignment = assignments[0];
+    const { orgId, storeId } = await ensureAssignment(user, assignments);
 
     const { password: _, ...userWithoutPassword } = user;
-
-    // Determine default store when user has org assignment but no store assignment
-    let derivedStoreId: string | undefined = assignment?.store_id || undefined;
-    if (assignment?.org_id && !derivedStoreId) {
-      try {
-        const [defaultStore] = await db
-          .select()
-          .from(stores)
-          .where(eq(stores.org_id, assignment.org_id))
-          .limit(1);
-        derivedStoreId = defaultStore?.id;
-      } catch (e) {
-        // swallow; we'll proceed without a storeId if lookup fails
-      }
-    }
 
     // Attach org and store context to user object
     const userWithContext = {
       ...userWithoutPassword,
-      orgId: assignment?.org_id,
-      storeId: derivedStoreId,
+      orgId,
+      storeId,
     };
 
     console.log("[AUTH] Deserialized user:", {
