@@ -33,9 +33,11 @@ if (process.env.SENTRY_DSN) {
     dsn: process.env.SENTRY_DSN,
     environment: process.env.NODE_ENV || "development",
     integrations: [
-      // Enable performance instrumentation
       nodeProfilingIntegration(),
-      new Sentry.Integrations.Http({ tracing: true }),
+      // HTTP integration enables automatic instrumentation of outgoing requests
+      Sentry.httpIntegration(),
+      // Express integration enables request tracing and spans for handlers
+      Sentry.expressIntegration(),
     ],
     tracesSampleRate: parseFloat(
       process.env.SENTRY_TRACES_SAMPLE_RATE || "0.1"
@@ -44,11 +46,6 @@ if (process.env.SENTRY_DSN) {
       process.env.SENTRY_PROFILES_SAMPLE_RATE || "0.05"
     ),
   });
-
-  // Request handler must be the first middleware on the app
-  app.use(Sentry.Handlers.requestHandler());
-  // Tracing handler
-  app.use(Sentry.Handlers.tracingHandler());
 }
 
 // Trust proxy for proper session handling
@@ -145,7 +142,7 @@ app.use((req, res, next) => {
 
   // Sentry error handler should be after all routes and middleware
   if (process.env.SENTRY_DSN) {
-    app.use(Sentry.Handlers.errorHandler());
+    app.use(Sentry.expressErrorHandler());
   }
 
   // Use dynamic host/port

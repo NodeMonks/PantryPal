@@ -262,6 +262,7 @@ export class DrizzleStorage implements IStorage {
         id: bill_items.id,
         bill_id: bill_items.bill_id,
         product_id: bill_items.product_id,
+        product_name: (products as any).name,
         quantity: bill_items.quantity,
         unit_price: bill_items.unit_price,
         total_price: bill_items.total_price,
@@ -269,6 +270,7 @@ export class DrizzleStorage implements IStorage {
       })
       .from(bill_items)
       .leftJoin(bills, eq(bill_items.bill_id, bills.id))
+      .leftJoin(products, eq(bill_items.product_id, products.id))
       .where(and(eq(bill_items.bill_id, billId), eq(bills.org_id, ctx.orgId)));
   }
 
@@ -276,8 +278,11 @@ export class DrizzleStorage implements IStorage {
     billItem: InsertBillItem,
     ctx: TenantContext
   ): Promise<BillItem> {
-    // Tenant context validated via bill relationship
-    const result = await db.insert(bill_items).values(billItem).returning();
+    // Include org_id for tenant isolation on bill_items
+    const result = await db
+      .insert(bill_items)
+      .values({ ...(billItem as any), org_id: ctx.orgId } as any)
+      .returning();
     return result[0];
   }
 

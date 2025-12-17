@@ -45,6 +45,7 @@ export interface BillItem {
   id: string;
   bill_id: string;
   product_id: string;
+  product_name?: string;
   quantity: number;
   unit_price: string;
   total_price: string;

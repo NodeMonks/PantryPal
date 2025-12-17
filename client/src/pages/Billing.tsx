@@ -350,7 +350,9 @@ export default function Billing() {
                   <TableBody>
                     {items.map((i) => (
                       <TableRow key={i.id}>
-                        <TableCell>{i.product_id.slice(0, 8)}…</TableCell>
+                        <TableCell>
+                          {i.product_name || `${i.product_id.slice(0, 8)}…`}
+                        </TableCell>
                         <TableCell>{i.quantity}</TableCell>
                         <TableCell>
                           ₹{Number(i.unit_price).toLocaleString()}

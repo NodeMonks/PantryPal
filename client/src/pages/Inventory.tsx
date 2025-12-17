@@ -116,7 +116,8 @@ export default function Inventory() {
         const items = products.map((p) => ({
           id: p.id,
           orgId: (user as any).orgId,
-          storeId: null,
+          // Store is deprecated in org-only mode; keep empty string for type compatibility
+          storeId: "",
           name: p.name,
           barcode: p.barcode ?? null,
           updatedAt: Date.now(),

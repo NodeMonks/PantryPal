@@ -20,12 +20,10 @@ import {
   Square,
   Plus,
   Minus,
-  BarChart3,
   ShoppingCart,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import QrScanner from "qr-scanner";
-import { BrowserMultiFormatReader, NotFoundException } from "@zxing/library";
 
 export default function QRScanner() {
   const [manualCode, setManualCode] = useState("");
@@ -33,10 +31,7 @@ export default function QRScanner() {
   const [product, setProduct] = useState<Product | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
-  const [scannerType, setScannerType] = useState<"qr" | "barcode">("barcode");
   const [scanner, setScanner] = useState<QrScanner | null>(null);
-  const [barcodeReader, setBarcodeReader] =
-    useState<BrowserMultiFormatReader | null>(null);
   const [stockQuantity, setStockQuantity] = useState(1);
   const { toast } = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -134,7 +129,7 @@ export default function QRScanner() {
 
     try {
       setIsScanning(true);
-      setScannerType("qr");
+
       const qrScanner = new QrScanner(
         videoRef.current,
         (result) => {
@@ -170,58 +165,11 @@ export default function QRScanner() {
     }
   };
 
-  const startBarcodeScanning = async () => {
-    if (!videoRef.current) return;
-
-    try {
-      setIsScanning(true);
-      setScannerType("barcode");
-
-      const reader = new BrowserMultiFormatReader();
-      setBarcodeReader(reader);
-
-      await reader.decodeFromVideoDevice(
-        undefined,
-        videoRef.current,
-        (result, error) => {
-          if (result) {
-            toast({
-              title: "Barcode Detected!",
-              description: "Processing scanned data...",
-            });
-            processCode(result.getText());
-            stopScanning();
-          }
-          if (error && !(error instanceof NotFoundException)) {
-            console.error("Barcode scan error:", error);
-          }
-        }
-      );
-
-      toast({
-        title: "Barcode Scanner Started",
-        description: "Point your camera at a barcode",
-      });
-    } catch (error) {
-      console.error("Error starting barcode scanner:", error);
-      toast({
-        title: "Camera Error",
-        description: "Failed to access camera. Please check permissions.",
-        variant: "destructive",
-      });
-      setIsScanning(false);
-    }
-  };
-
   const stopScanning = () => {
     if (scanner) {
       scanner.stop();
       scanner.destroy();
       setScanner(null);
-    }
-    if (barcodeReader) {
-      barcodeReader.reset();
-      setBarcodeReader(null);
     }
     setIsScanning(false);
   };
@@ -282,20 +230,15 @@ export default function QRScanner() {
         scanner.stop();
         scanner.destroy();
       }
-      if (barcodeReader) {
-        barcodeReader.reset();
-      }
     };
-  }, [scanner, barcodeReader]);
+  }, [scanner]);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">
-          Barcode & QR Scanner
-        </h1>
+        <h1 className="text-3xl font-bold text-foreground">QR Scanner</h1>
         <p className="text-muted-foreground">
-          Scan barcodes or QR codes to quickly find and manage products
+          Scan QR codes to quickly find and manage products
         </p>
       </div>
 
@@ -319,7 +262,7 @@ export default function QRScanner() {
                 <div className="flex gap-2">
                   <Input
                     id="manual-code"
-                    placeholder="Enter barcode, QR code, or product ID"
+                    placeholder="Enter QR code or product ID"
                     value={manualCode}
                     onChange={(e) => setManualCode(e.target.value)}
                     onKeyPress={(e) => e.key === "Enter" && handleManualScan()}
@@ -347,17 +290,10 @@ export default function QRScanner() {
                   <div className="border-2 border-dashed rounded-lg p-8 text-center bg-muted/50 h-64 flex flex-col justify-center">
                     <Camera className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                     <p className="text-muted-foreground mb-4">
-                      Ready to scan codes
+                      Ready to scan QR codes
                     </p>
                     <div className="flex gap-2 justify-center">
-                      <Button
-                        onClick={startBarcodeScanning}
-                        className="mx-auto"
-                      >
-                        <BarChart3 className="h-4 w-4 mr-2" />
-                        Scan Barcode
-                      </Button>
-                      <Button onClick={startQRScanning} variant="outline">
+                      <Button onClick={startQRScanning}>
                         <QrCode className="h-4 w-4 mr-2" />
                         Scan QR
                       </Button>
@@ -366,9 +302,7 @@ export default function QRScanner() {
                 )}
                 {isScanning && (
                   <div className="absolute top-2 right-2 z-10 flex gap-2">
-                    <Badge variant="secondary">
-                      {scannerType === "qr" ? "QR Scanner" : "Barcode Scanner"}
-                    </Badge>
+                    <Badge variant="secondary">QR Scanner</Badge>
                     <Button
                       onClick={stopScanning}
                       variant="destructive"
@@ -553,7 +487,7 @@ export default function QRScanner() {
                 <QrCode className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="text-lg font-semibold mb-2">No Code Scanned</h3>
                 <p className="text-muted-foreground">
-                  Scan a barcode or QR code to see product information
+                  Scan a QR code to see product information
                 </p>
               </CardContent>
             </Card>
