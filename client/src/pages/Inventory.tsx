@@ -112,11 +112,12 @@ export default function Inventory() {
       const products = await api.getProducts();
       setProducts(products);
       // Cache in IndexedDB for prod environment
-      if (shouldEnableIndexedDb() && user?.org_id && user?.store_id) {
+      if (shouldEnableIndexedDb() && (user as any)?.orgId) {
         const items = products.map((p) => ({
           id: p.id,
-          orgId: user.org_id,
-          storeId: user.store_id,
+          orgId: (user as any).orgId,
+          // Store is deprecated in org-only mode; keep empty string for type compatibility
+          storeId: "",
           name: p.name,
           barcode: p.barcode ?? null,
           updatedAt: Date.now(),
@@ -476,6 +477,62 @@ export default function Inventory() {
                                 Edit
                               </Link>
                             </Button>
+                            {/** Archive/Unarchive **/}
+                            {(product as any).is_active ?? true ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    const resp = await fetch(
+                                      `/api/products/${product.id}/archive`,
+                                      {
+                                        method: "PATCH",
+                                        credentials: "include",
+                                      }
+                                    );
+                                    if (!resp.ok)
+                                      throw new Error("Archive failed");
+                                    toast({ title: "Product archived" });
+                                    loadProducts();
+                                  } catch (e) {
+                                    toast({
+                                      title: "Archive failed",
+                                      variant: "destructive",
+                                    });
+                                  }
+                                }}
+                              >
+                                Archive
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    const resp = await fetch(
+                                      `/api/products/${product.id}/unarchive`,
+                                      {
+                                        method: "PATCH",
+                                        credentials: "include",
+                                      }
+                                    );
+                                    if (!resp.ok)
+                                      throw new Error("Restore failed");
+                                    toast({ title: "Product restored" });
+                                    loadProducts();
+                                  } catch (e) {
+                                    toast({
+                                      title: "Restore failed",
+                                      variant: "destructive",
+                                    });
+                                  }
+                                }}
+                              >
+                                Restore
+                              </Button>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"

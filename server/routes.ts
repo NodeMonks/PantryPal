@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { isAuthenticated, hasRole } from "./auth";
-import { requireOrgId, requireStoreId } from "./middleware/tenantContext";
+import { requireOrgId } from "./middleware/tenantContext";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -19,7 +19,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("🍪 req.session:", req.session);
 
       let orgId: string | undefined;
-      let storeId: string | undefined;
 
       // Try to get orgId and storeId, handle missing gracefully
       try {
@@ -33,13 +32,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      try {
-        storeId = requireStoreId(req);
-        console.log("✅ storeId:", storeId);
-      } catch (e: any) {
-        console.warn("⚠️ Missing storeId:", e.message);
-        // Store ID might be optional in some cases, continue with just orgId
-      }
+      // Org-only tenancy: storeId not required
 
       const { db } = await import("./db");
       const { products } = await import("../shared/schema");
@@ -65,9 +58,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Build where clause based on available context
       const whereConditions = [eq(products.org_id, orgId), codeMatch];
-      if (storeId) {
-        whereConditions.push(eq(products.store_id, storeId));
-      }
 
       // Search by barcode, QR code, or product ID
       const [product] = await db
@@ -99,18 +89,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     hasRole("admin", "store_manager", "inventory_manager"),
     async (req, res) => {
       try {
-        const { id } = req.params;
-        const { quantity, operation } = req.body; // operation: 'set', 'add', 'subtract'
         const orgId = requireOrgId(req);
-        const storeId = requireStoreId(req);
-
-        const product = await storage.getProduct(id, { orgId, storeId });
+        const product = await storage.deleteProduct(req.params.id, {
+          orgId,
+        });
         if (!product) {
           return res.status(404).json({ error: "Product not found" });
         }
+        res.json({ message: "Product deleted successfully", product });
 
-        let newQuantity = product.quantity_in_stock || 0;
-
+        // Handle FK violations gracefully: product referenced by bill_items
+        if (error?.code === "23503") {
+          return res.status(409).json({
+            error: "Product cannot be deleted",
+            details:
+              "This product is referenced in one or more bill items. Remove those references or archive the product instead.",
+          });
+        }
+        console.error("Error deleting product:", error);
+        res.status(500).json({ error: "Failed to delete product" });
         switch (operation) {
           case "set":
             newQuantity = quantity;
@@ -130,7 +127,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const updatedProduct = await storage.updateProduct(
           id,
           { quantity_in_stock: newQuantity },
-          { orgId, storeId }
+          { orgId }
         );
 
         // Log inventory transaction
@@ -148,7 +145,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             reference_type: "adjustment",
             notes: `Stock ${operation} via barcode scanner`,
           },
-          { orgId, storeId }
+          { orgId }
         );
 
         res.json(updatedProduct);
@@ -163,8 +160,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/products", isAuthenticated, async (req, res) => {
     try {
       const orgId = requireOrgId(req);
-      const storeId = requireStoreId(req);
-      const products = await storage.getProducts({ orgId, storeId });
+      const products = await storage.getProducts({ orgId });
       res.json(products);
     } catch (error) {
       console.error("Error fetching products:", error);
@@ -175,10 +171,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/products/:id", isAuthenticated, async (req, res) => {
     try {
       const orgId = requireOrgId(req);
-      const storeId = requireStoreId(req);
       const product = await storage.getProduct(req.params.id, {
         orgId,
-        storeId,
       });
       if (!product) {
         return res.status(404).json({ error: "Product not found" });
@@ -198,7 +192,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req, res) => {
       try {
         const orgId = requireOrgId(req);
-        const storeId = requireStoreId(req);
         // Convert empty date strings to null to avoid PostgreSQL errors
         const productData = {
           ...req.body,
@@ -208,7 +201,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const product = await storage.createProduct(productData, {
           orgId,
-          storeId,
         });
         res.status(201).json(product);
       } catch (error) {
@@ -226,7 +218,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req, res) => {
       try {
         const orgId = requireOrgId(req);
-        const storeId = requireStoreId(req);
         // Convert empty date strings to null to avoid PostgreSQL errors
         const productData = {
           ...req.body,
@@ -237,7 +228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const product = await storage.updateProduct(
           req.params.id,
           productData,
-          { orgId, storeId }
+          { orgId }
         );
         if (!product) {
           return res.status(404).json({ error: "Product not found" });
@@ -258,10 +249,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req, res) => {
       try {
         const orgId = requireOrgId(req);
-        const storeId = requireStoreId(req);
         const product = await storage.deleteProduct(req.params.id, {
           orgId,
-          storeId,
         });
         if (!product) {
           return res.status(404).json({ error: "Product not found" });
@@ -274,12 +263,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  // Archive product (soft delete)
+  app.patch(
+    "/api/products/:id/archive",
+    isAuthenticated,
+    hasRole("admin", "store_manager"),
+    async (req, res) => {
+      try {
+        const orgId = requireOrgId(req);
+        const product = await storage.updateProduct(
+          req.params.id,
+          { is_active: false } as any,
+          { orgId }
+        );
+        if (!product) {
+          return res.status(404).json({ error: "Product not found" });
+        }
+        res.json({ message: "Product archived", product });
+      } catch (error) {
+        console.error("Error archiving product:", error);
+        res.status(500).json({ error: "Failed to archive product" });
+      }
+    }
+  );
+
+  // Unarchive product (restore)
+  app.patch(
+    "/api/products/:id/unarchive",
+    isAuthenticated,
+    hasRole("admin", "store_manager"),
+    async (req, res) => {
+      try {
+        const orgId = requireOrgId(req);
+        const product = await storage.updateProduct(
+          req.params.id,
+          { is_active: true } as any,
+          { orgId }
+        );
+        if (!product) {
+          return res.status(404).json({ error: "Product not found" });
+        }
+        res.json({ message: "Product restored", product });
+      } catch (error) {
+        console.error("Error restoring product:", error);
+        res.status(500).json({ error: "Failed to restore product" });
+      }
+    }
+  );
+
   // Customers API - All authenticated users can view
   app.get("/api/customers", isAuthenticated, async (req, res) => {
     try {
       const orgId = requireOrgId(req);
-      const storeId = requireStoreId(req);
-      const customers = await storage.getCustomers({ orgId, storeId });
+      const customers = await storage.getCustomers({ orgId });
       res.json(customers);
     } catch (error) {
       console.error("Error fetching customers:", error);
@@ -294,10 +330,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req, res) => {
       try {
         const orgId = requireOrgId(req);
-        const storeId = requireStoreId(req);
         const customer = await storage.createCustomer(req.body, {
           orgId,
-          storeId,
         });
         res.status(201).json(customer);
       } catch (error) {
@@ -311,8 +345,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/bills", isAuthenticated, async (req, res) => {
     try {
       const orgId = requireOrgId(req);
-      const storeId = requireStoreId(req);
-      const bills = await storage.getBills({ orgId, storeId });
+      const bills = await storage.getBills({ orgId });
       res.json(bills);
     } catch (error) {
       console.error("Error fetching bills:", error);
@@ -320,11 +353,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Scalable, paginated bills endpoint with keyset pagination
+  app.get("/api/bills/page", isAuthenticated, async (req, res) => {
+    try {
+      const orgId = requireOrgId(req);
+      const limit = Math.min(Number(req.query.limit) || 50, 200);
+      const cursorCreatedAt = req.query.cursorCreatedAt
+        ? new Date(String(req.query.cursorCreatedAt))
+        : undefined;
+      const cursorId = req.query.cursorId
+        ? String(req.query.cursorId)
+        : undefined;
+
+      const { db } = await import("./db");
+      const { bills } = await import("../shared/schema");
+      const { and, eq, or, lt } = await import("drizzle-orm");
+
+      const base = [eq(bills.org_id, orgId)];
+      if (cursorCreatedAt && cursorId) {
+        base.push(
+          or(
+            and(eq(bills.created_at, cursorCreatedAt), lt(bills.id, cursorId)),
+            lt(bills.created_at, cursorCreatedAt)
+          )
+        );
+      }
+
+      const rows = await db
+        .select()
+        .from(bills)
+        .where(and(...base))
+        .orderBy((bills as any).created_at, (bills as any).id)
+        .limit(limit);
+
+      const items = rows.reverse(); // ensure descending order for UI
+      const last = items[items.length - 1];
+      const nextCursor = last
+        ? { createdAt: last.created_at, id: last.id }
+        : null;
+
+      res.json({ items, nextCursor, limit });
+    } catch (error) {
+      console.error("Error fetching paged bills:", error);
+      res.status(500).json({ error: "Failed to fetch paged bills" });
+    }
+  });
+
   app.get("/api/bills/today", isAuthenticated, async (req, res) => {
     try {
       const orgId = requireOrgId(req);
-      const storeId = requireStoreId(req);
-      const bills = await storage.getBillsForToday({ orgId, storeId });
+      const bills = await storage.getBillsForToday({ orgId });
       res.json(bills);
     } catch (error) {
       console.error("Error fetching today's bills:", error);
@@ -340,8 +418,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req, res) => {
       try {
         const orgId = requireOrgId(req);
-        const storeId = requireStoreId(req);
-        const bill = await storage.createBill(req.body, { orgId, storeId });
+        const bill = await storage.createBill(req.body, { orgId });
         res.status(201).json(bill);
       } catch (error) {
         console.error("Error creating bill:", error);
@@ -354,10 +431,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/bills/:billId/items", isAuthenticated, async (req, res) => {
     try {
       const orgId = requireOrgId(req);
-      const storeId = requireStoreId(req);
       const items = await storage.getBillItems(req.params.billId, {
         orgId,
-        storeId,
       });
       res.json(items);
     } catch (error) {
@@ -373,13 +448,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req, res) => {
       try {
         const orgId = requireOrgId(req);
-        const storeId = requireStoreId(req);
         const item = await storage.createBillItem(
           {
             ...req.body,
             bill_id: req.params.billId,
           },
-          { orgId, storeId }
+          { orgId }
         );
         res.status(201).json(item);
       } catch (error) {
@@ -393,10 +467,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/inventory-transactions", isAuthenticated, async (req, res) => {
     try {
       const orgId = requireOrgId(req);
-      const storeId = requireStoreId(req);
       const productId = req.query.product_id as string;
       const transactions = await storage.getInventoryTransactions(
-        { orgId, storeId },
+        { orgId },
         productId
       );
       res.json(transactions);
@@ -413,10 +486,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     async (req, res) => {
       try {
         const orgId = requireOrgId(req);
-        const storeId = requireStoreId(req);
         const transaction = await storage.createInventoryTransaction(req.body, {
           orgId,
-          storeId,
         });
         res.status(201).json(transaction);
       } catch (error) {
@@ -494,11 +565,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/dashboard/stats", isAuthenticated, async (req, res) => {
     try {
       const orgId = requireOrgId(req);
-      const storeId = requireStoreId(req);
-      const products = await storage.getProducts({ orgId, storeId });
-      const todayBills = await storage.getBillsForToday({ orgId, storeId });
-      const allBills = await storage.getBills({ orgId, storeId });
-      const customers = await storage.getCustomers({ orgId, storeId });
+      const products = await storage.getProducts({ orgId });
+      const todayBills = await storage.getBillsForToday({ orgId });
+      const allBills = await storage.getBills({ orgId });
+      const customers = await storage.getCustomers({ orgId });
 
       const lowStock = products.filter(
         (p) => (p.quantity_in_stock || 0) <= (p.min_stock_level || 0)

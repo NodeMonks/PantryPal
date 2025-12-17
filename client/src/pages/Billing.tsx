@@ -1,72 +1,118 @@
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { api, type Bill } from "@/lib/api"
-import { Link } from "react-router-dom"
-import { Plus, Search, Receipt, IndianRupee, Eye } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { api, type Bill, type BillItem } from "@/lib/api";
+import { Link } from "react-router-dom";
+import { Plus, Search, Receipt, IndianRupee, Eye } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 export default function Billing() {
-  const [bills, setBills] = useState<Bill[]>([])
-  const [filteredBills, setFilteredBills] = useState<Bill[]>([])
-  const [searchTerm, setSearchTerm] = useState("")
-  const [loading, setLoading] = useState(true)
-  const { toast } = useToast()
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [filteredBills, setFilteredBills] = useState<Bill[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
+  const [items, setItems] = useState<BillItem[]>([]);
+  const [itemsLoading, setItemsLoading] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
-    loadBills()
-  }, [])
+    loadBills();
+  }, []);
 
   useEffect(() => {
-    const filtered = bills.filter(bill =>
-      bill.bill_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (bill.customer_id && bill.customer_id.toLowerCase().includes(searchTerm.toLowerCase()))
-    )
-    setFilteredBills(filtered)
-  }, [bills, searchTerm])
+    const filtered = bills.filter(
+      (bill) =>
+        bill.bill_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (bill.customer_id &&
+          bill.customer_id.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+    setFilteredBills(filtered);
+  }, [bills, searchTerm]);
 
   const loadBills = async () => {
     try {
-      setLoading(true)
-      const billsData = await api.getBills()
-      setBills(billsData)
+      setLoading(true);
+      const billsData = await api.getBills();
+      setBills(billsData);
     } catch (error) {
-      console.error('Error loading bills:', error)
+      console.error("Error loading bills:", error);
       toast({
         title: "Error",
         description: "Failed to load bills",
         variant: "destructive",
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
+
+  const handleViewBill = async (bill: Bill) => {
+    setSelectedBill(bill);
+    setViewOpen(true);
+    setItems([]);
+    try {
+      setItemsLoading(true);
+      const data = await api.getBillItems(bill.id);
+      setItems(data);
+    } catch (error) {
+      console.error("Error loading bill items:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load bill items",
+        variant: "destructive",
+      });
+    } finally {
+      setItemsLoading(false);
+    }
+  };
 
   const getPaymentMethodBadge = (method: string | null) => {
     switch (method) {
-      case 'cash':
-        return <Badge variant="secondary">Cash</Badge>
-      case 'card':
-        return <Badge variant="default">Card</Badge>
-      case 'upi':
-        return <Badge variant="outline">UPI</Badge>
+      case "cash":
+        return <Badge variant="secondary">Cash</Badge>;
+      case "card":
+        return <Badge variant="default">Card</Badge>;
+      case "upi":
+        return <Badge variant="outline">UPI</Badge>;
       default:
-        return <Badge variant="secondary">Cash</Badge>
+        return <Badge variant="secondary">Cash</Badge>;
     }
-  }
+  };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
+    return new Date(dateString).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
 
   if (loading) {
     return (
@@ -79,7 +125,7 @@ export default function Billing() {
         </div>
         <div className="text-center py-8">Loading bills...</div>
       </div>
-    )
+    );
   }
 
   return (
@@ -114,11 +160,13 @@ export default function Billing() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {bills.filter(bill => {
-                const billDate = new Date(bill.created_at).toDateString()
-                const today = new Date().toDateString()
-                return billDate === today
-              }).length}
+              {
+                bills.filter((bill) => {
+                  const billDate = new Date(bill.created_at).toDateString();
+                  const today = new Date().toDateString();
+                  return billDate === today;
+                }).length
+              }
             </div>
           </CardContent>
         </Card>
@@ -129,7 +177,10 @@ export default function Billing() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              ₹{bills.reduce((sum, bill) => sum + Number(bill.final_amount), 0).toLocaleString()}
+              ₹
+              {bills
+                .reduce((sum, bill) => sum + Number(bill.final_amount), 0)
+                .toLocaleString()}
             </div>
           </CardContent>
         </Card>
@@ -140,7 +191,15 @@ export default function Billing() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-purple-600">
-              ₹{bills.length > 0 ? Math.round(bills.reduce((sum, bill) => sum + Number(bill.final_amount), 0) / bills.length) : 0}
+              ₹
+              {bills.length > 0
+                ? Math.round(
+                    bills.reduce(
+                      (sum, bill) => sum + Number(bill.final_amount),
+                      0
+                    ) / bills.length
+                  )
+                : 0}
             </div>
           </CardContent>
         </Card>
@@ -178,7 +237,9 @@ export default function Billing() {
         <CardContent>
           {filteredBills.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              {searchTerm ? "No bills found matching your search." : "No bills generated yet."}
+              {searchTerm
+                ? "No bills found matching your search."
+                : "No bills generated yet."}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -199,14 +260,19 @@ export default function Billing() {
                         <div className="font-medium">{bill.bill_number}</div>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">{formatDate(bill.created_at)}</div>
+                        <div className="text-sm">
+                          {formatDate(bill.created_at)}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="font-medium">₹{Number(bill.final_amount).toLocaleString()}</span>
+                          <span className="font-medium">
+                            ₹{Number(bill.final_amount).toLocaleString()}
+                          </span>
                           {Number(bill.discount_amount) > 0 && (
                             <span className="text-xs text-green-600">
-                              Discount: ₹{Number(bill.discount_amount).toLocaleString()}
+                              Discount: ₹
+                              {Number(bill.discount_amount).toLocaleString()}
                             </span>
                           )}
                         </div>
@@ -215,7 +281,11 @@ export default function Billing() {
                         {getPaymentMethodBadge(bill.payment_method)}
                       </TableCell>
                       <TableCell>
-                        <Button variant="outline" size="sm">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewBill(bill)}
+                        >
                           <Eye className="h-4 w-4 mr-2" />
                           View
                         </Button>
@@ -228,6 +298,77 @@ export default function Billing() {
           )}
         </CardContent>
       </Card>
+
+      {/* View Bill Dialog */}
+      <Dialog open={viewOpen} onOpenChange={setViewOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Bill Details</DialogTitle>
+            <DialogDescription>
+              {selectedBill ? (
+                <div className="mt-2 space-y-1">
+                  <div className="text-sm">
+                    Bill No:{" "}
+                    <span className="font-medium">
+                      {selectedBill.bill_number}
+                    </span>
+                  </div>
+                  <div className="text-sm">
+                    Date:{" "}
+                    {new Date(selectedBill.created_at).toLocaleString("en-IN")}
+                  </div>
+                  <div className="text-sm">
+                    Payment:{" "}
+                    {selectedBill.payment_method?.toUpperCase() || "CASH"}
+                  </div>
+                  <div className="text-sm">
+                    Amount: ₹
+                    {Number(selectedBill.final_amount).toLocaleString()}
+                  </div>
+                </div>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4">
+            {itemsLoading ? (
+              <div className="text-center py-6">Loading items…</div>
+            ) : items.length === 0 ? (
+              <div className="text-center py-6 text-muted-foreground">
+                No items found for this bill.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product</TableHead>
+                      <TableHead>Qty</TableHead>
+                      <TableHead>Unit Price</TableHead>
+                      <TableHead>Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((i) => (
+                      <TableRow key={i.id}>
+                        <TableCell>
+                          {i.product_name || `${i.product_id.slice(0, 8)}…`}
+                        </TableCell>
+                        <TableCell>{i.quantity}</TableCell>
+                        <TableCell>
+                          ₹{Number(i.unit_price).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          ₹{Number(i.total_price).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
-  )
+  );
 }

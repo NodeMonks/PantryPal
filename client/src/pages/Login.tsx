@@ -229,24 +229,6 @@ export default function Login() {
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Need access? Ask an existing administrator to invite you.
             </p>
-
-            {/* Demo Credentials */}
-            <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-800 space-y-2">
-              <div className="flex items-center justify-center gap-2 text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                <Sparkles className="h-3 w-3" />
-                Demo Credentials
-              </div>
-              <div className="text-xs space-y-1">
-                <p className="font-mono text-gray-600 dark:text-gray-400">
-                  <span className="font-semibold">Admin:</span> admin /
-                  PantryPal@2025!Secure
-                </p>
-                <p className="font-mono text-gray-600 dark:text-gray-400">
-                  <span className="font-semibold">Cashier:</span> cashier /
-                  cashier123
-                </p>
-              </div>
-            </div>
           </div>
         </div>
       </div>

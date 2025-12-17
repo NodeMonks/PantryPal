@@ -46,9 +46,6 @@ export const products = pgTable("products", {
   org_id: uuid("org_id")
     .notNull()
     .references(() => organizations.id, { onDelete: "cascade" }),
-  store_id: uuid("store_id")
-    .notNull()
-    .references(() => stores.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   category: text("category").notNull(),
   brand: text("brand"),
@@ -61,6 +58,7 @@ export const products = pgTable("products", {
   quantity_in_stock: integer("quantity_in_stock").default(0),
   min_stock_level: integer("min_stock_level").default(5),
   unit: text("unit").default("piece"),
+  is_active: boolean("is_active").notNull().default(true),
   description: text("description"),
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow(),
@@ -73,9 +71,6 @@ export const customers = pgTable("customers", {
   org_id: uuid("org_id")
     .notNull()
     .references(() => organizations.id, { onDelete: "cascade" }),
-  store_id: uuid("store_id")
-    .notNull()
-    .references(() => stores.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   phone: text("phone"),
   email: text("email"),
@@ -90,9 +85,6 @@ export const bills = pgTable("bills", {
   org_id: uuid("org_id")
     .notNull()
     .references(() => organizations.id, { onDelete: "cascade" }),
-  store_id: uuid("store_id")
-    .notNull()
-    .references(() => stores.id, { onDelete: "cascade" }),
   bill_number: text("bill_number").notNull().unique(),
   customer_id: uuid("customer_id").references(() => customers.id),
   total_amount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
@@ -129,9 +121,6 @@ export const inventory_transactions = pgTable("inventory_transactions", {
   org_id: uuid("org_id")
     .notNull()
     .references(() => organizations.id, { onDelete: "cascade" }),
-  store_id: uuid("store_id")
-    .notNull()
-    .references(() => stores.id, { onDelete: "cascade" }),
   product_id: uuid("product_id")
     .references(() => products.id, { onDelete: "cascade" })
     .notNull(),

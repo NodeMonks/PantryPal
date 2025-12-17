@@ -41,6 +41,17 @@ export interface Bill {
   created_at: string;
 }
 
+export interface BillItem {
+  id: string;
+  bill_id: string;
+  product_id: string;
+  product_name?: string;
+  quantity: number;
+  unit_price: string;
+  total_price: string;
+  created_at: string;
+}
+
 export interface DashboardStats {
   totalProducts: number;
   lowStock: number;
@@ -159,6 +170,10 @@ class ApiClient {
 
   async createBill(bill: Partial<Bill>): Promise<Bill> {
     return this.post<Bill>("/bills", bill);
+  }
+
+  async getBillItems(billId: string): Promise<BillItem[]> {
+    return this.get<BillItem[]>(`/bills/${encodeURIComponent(billId)}/items`);
   }
 
   // Dashboard

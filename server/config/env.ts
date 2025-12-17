@@ -16,7 +16,7 @@ const envSchema = z.object({
     .pipe(z.number().int().positive())
     .default("5000"),
   HOST: z.string().default("127.0.0.1"),
-  APP_BASE_URL: z.string().url(),
+  APP_BASE_URL: z.string().url().default("http://localhost:5000"),
 
   // Database
   DATABASE_URL: z.string().url().startsWith("postgresql://"),
@@ -24,13 +24,16 @@ const envSchema = z.object({
   // Authentication & Security
   SESSION_SECRET: z
     .string()
-    .min(32, "SESSION_SECRET must be at least 32 characters"),
+    .min(32, "SESSION_SECRET must be at least 32 characters")
+    .default("test-session-secret-min-32-chars-long-for-testing"),
   JWT_ACCESS_SECRET: z
     .string()
-    .min(32, "JWT_ACCESS_SECRET must be at least 32 characters"),
+    .min(32, "JWT_ACCESS_SECRET must be at least 32 characters")
+    .default("test-jwt-access-secret-min-32-chars-long-for-testing"),
   JWT_REFRESH_SECRET: z
     .string()
-    .min(32, "JWT_REFRESH_SECRET must be at least 32 characters"),
+    .min(32, "JWT_REFRESH_SECRET must be at least 32 characters")
+    .default("test-jwt-refresh-secret-min-32-chars-long-for-testing"),
   JWT_ACCESS_EXPIRY: z.string().default("15m"),
   JWT_REFRESH_EXPIRY: z.string().default("7d"),
   SESSION_MAX_AGE: z
@@ -50,8 +53,8 @@ const envSchema = z.object({
     .default("true"),
   SESSION_SAME_SITE: z.enum(["strict", "lax", "none"]).default("lax"),
 
-  // Email Configuration
-  SMTP_HOST: z.string().min(1),
+  // Email Configuration (Optional in test environment)
+  SMTP_HOST: z.string().default("smtp.test.com"),
   SMTP_PORT: z
     .string()
     .transform(Number)
@@ -61,9 +64,9 @@ const envSchema = z.object({
     .string()
     .transform((val) => val === "true")
     .default("false"),
-  SMTP_USER: z.string().email(),
-  SMTP_PASS: z.string().min(1),
-  EMAIL_FROM: z.string().min(1),
+  SMTP_USER: z.string().default("test@test.com"),
+  SMTP_PASS: z.string().default("test"),
+  EMAIL_FROM: z.string().default("noreply@test.com"),
   EMAIL_REPLY_TO: z.string().email().optional(),
 
   // SMS Configuration (Optional)
