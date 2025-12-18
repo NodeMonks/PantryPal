@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import {
   Eye,
@@ -213,6 +213,25 @@ export default function Login() {
               )}
             </Button>
           </form>
+
+          {/* Subscription CTA for new orgs */}
+          <div className="rounded-xl border border-orange-200 bg-white shadow-sm dark:border-orange-900/50 dark:bg-gray-900/60 p-4 flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                Haven't registered your org?
+              </p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Start a subscription to create your organization and admin
+                account.
+              </p>
+            </div>
+            <Link
+              to="/subscribe"
+              className="inline-flex items-center whitespace-nowrap rounded-lg bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-orange-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+            >
+              Start subscription
+            </Link>
+          </div>
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">

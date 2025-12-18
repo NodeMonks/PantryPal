@@ -148,6 +148,12 @@ const envSchema = z.object({
     .pipe(z.number().int().positive())
     .optional(),
   VITE_HMR_PROTOCOL: z.enum(["ws", "wss"]).optional(),
+
+  // Payments (Optional - Razorpay)
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  SUBSCRIPTION_DEFAULT_PLAN: z.string().default("starter-monthly"),
 });
 
 /**

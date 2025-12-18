@@ -1,10 +1,16 @@
 // server/db.ts
-import { drizzle } from "drizzle-orm/neon-http";
-import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-serverless";
+import { Pool, neonConfig } from "@neondatabase/serverless";
 import * as schema from "../shared/schema";
 import dotenv from "dotenv";
+import ws from "ws";
 
 dotenv.config();
+
+// Use ws WebSocket implementation for Node 22 compatibility
+neonConfig.webSocketConstructor = ws;
+neonConfig.useSecureWebSocket = true;
+neonConfig.pipelineConnect = 10;
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is not set in environment variables");
@@ -16,36 +22,33 @@ const SLOW_QUERY_THRESHOLD = parseInt(
 );
 const DB_LOGGING = process.env.DB_LOGGING === "true";
 
-// Wrap Neon client with query timing
-const rawSql = neon(process.env.DATABASE_URL);
-const sql: typeof rawSql = async (query, params, options) => {
-  const start = Date.now();
-  try {
-    const result = await rawSql(query, params, options);
-    const duration = Date.now() - start;
+// Use Pool for transaction support (neon-serverless)
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  // Allow ~200-300 concurrent org users by increasing pool size
+  max: 20,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 2_000,
+});
 
-    if (DB_LOGGING && duration > SLOW_QUERY_THRESHOLD) {
-      console.warn(
-        `⚠️  SLOW QUERY (${duration}ms): ${query.substring(0, 100)}${
-          query.length > 100 ? "..." : ""
-        }`
-      );
-    } else if (DB_LOGGING && duration > 100) {
-      console.log(`🐢 Query took ${duration}ms`);
-    }
+// Create drizzle database instance with pool
+export const db = drizzle(pool, {
+  schema,
+  logger: DB_LOGGING
+    ? {
+        logQuery(query: string, params: unknown[]) {
+          const start = Date.now();
+          // Log after execution via middleware or manually track timing
+          if (query.length > 100) {
+            console.log(`🔍 Query: ${query.substring(0, 100)}...`);
+          }
+        },
+      }
+    : undefined,
+});
 
-    return result;
-  } catch (error) {
-    const duration = Date.now() - start;
-    console.error(
-      `❌ Query failed after ${duration}ms: ${query.substring(0, 100)}`
-    );
-    throw error;
-  }
-};
-
-// Create drizzle database instance
-export const db = drizzle(sql, { schema });
+// Optionally add custom query timing via middleware or wrapping
+// For now, rely on Drizzle's built-in logging
 
 console.log(
   `✅ Connected to Neon DB successfully (slow query threshold: ${SLOW_QUERY_THRESHOLD}ms)`

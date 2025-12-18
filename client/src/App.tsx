@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { SyncStatus } from "./components/SyncStatus";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import InviteAccept from "./pages/InviteAccept";
@@ -21,7 +22,8 @@ import UserManagement from "./pages/UserManagement";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import { DashboardLayout } from "./components/layout/DashboardLayout";
-import BarcodeScanner from "./pages/BarcodeScanner";
+import BarcodeScannerPhysical from "./pages/BarcodeScannerPhysical";
+import Subscription from "./pages/Subscription";
 
 const queryClient = new QueryClient();
 
@@ -32,11 +34,13 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <SyncStatus />
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/invite/accept" element={<InviteAccept />} />
             <Route path="/org/invite" element={<OrgInvite />} />
+            <Route path="/subscribe" element={<Subscription />} />
 
             {/* Protected Routes - Dashboard is accessible by all authenticated users */}
             <Route
@@ -54,17 +58,6 @@ const App = () => (
                 <ProtectedRoute>
                   <DashboardLayout>
                     <Inventory />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
-
-            <Route
-              path="/barcode-scanner"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <BarcodeScanner />
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -125,7 +118,7 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <BarcodeScanner />
+                    <BarcodeScannerPhysical />
                   </DashboardLayout>
                 </ProtectedRoute>
               }

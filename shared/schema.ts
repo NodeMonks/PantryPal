@@ -51,6 +51,7 @@ export const products = pgTable("products", {
   brand: text("brand"),
   barcode: text("barcode"),
   qr_code: text("qr_code"),
+  qr_code_image: text("qr_code_image"),
   mrp: decimal("mrp", { precision: 10, scale: 2 }).notNull(),
   buying_cost: decimal("buying_cost", { precision: 10, scale: 2 }).notNull(),
   manufacturing_date: date("manufacturing_date"),
@@ -95,6 +96,8 @@ export const bills = pgTable("bills", {
   tax_amount: decimal("tax_amount", { precision: 10, scale: 2 }).default("0"),
   final_amount: decimal("final_amount", { precision: 10, scale: 2 }).notNull(),
   payment_method: text("payment_method").default("cash"),
+  finalized_at: timestamp("finalized_at"),
+  finalized_by: text("finalized_by"),
   created_at: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -102,6 +105,9 @@ export const bill_items = pgTable("bill_items", {
   id: uuid("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
+  org_id: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
   bill_id: uuid("bill_id")
     .references(() => bills.id, { onDelete: "cascade" })
     .notNull(),
@@ -111,6 +117,21 @@ export const bill_items = pgTable("bill_items", {
   quantity: integer("quantity").notNull(),
   unit_price: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
   total_price: decimal("total_price", { precision: 10, scale: 2 }).notNull(),
+  created_at: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const credit_notes = pgTable("credit_notes", {
+  id: uuid("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  org_id: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  bill_id: uuid("bill_id")
+    .notNull()
+    .references(() => bills.id, { onDelete: "cascade" }),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  reason: text("reason"),
   created_at: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -169,6 +190,36 @@ export const organizationRegistrationSchema = z.object({
     )
     .min(1, "At least one store is required")
     .max(10, "Maximum of 10 stores allowed"),
+  // GST + Vendor Details (India-specific)
+  vendorDetails: z
+    .object({
+      gst_number: z
+        .string()
+        .regex(
+          /^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}$/,
+          "Invalid GST number format (15 alphanumeric)"
+        )
+        .optional()
+        .or(z.literal("")),
+      owner_name: z
+        .string()
+        .min(2, "Owner name must be at least 2 characters")
+        .optional(),
+      owner_phone: z
+        .string()
+        .regex(/^\+?[0-9\-() ]{7,20}$/, "Invalid phone number")
+        .optional(),
+      owner_email: z.string().email().optional(),
+      msme_number: z.string().optional(),
+      business_address: z.string().optional(),
+      business_city: z.string().optional(),
+      business_state: z.string().optional(),
+      business_pin: z
+        .string()
+        .regex(/^\d{6}$/, "Invalid PIN code (6 digits)")
+        .optional(),
+    })
+    .optional(),
   admin: z.object({
     username: z
       .string()
@@ -201,23 +252,26 @@ export const insertProductSchema = createInsertSchema(products).omit({
   created_at: true,
   updated_at: true,
   org_id: true,
-  store_id: true,
 });
 export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
   created_at: true,
   org_id: true,
-  store_id: true,
 });
 export const insertBillSchema = createInsertSchema(bills).omit({
   id: true,
   created_at: true,
   org_id: true,
-  store_id: true,
 });
 export const insertBillItemSchema = createInsertSchema(bill_items).omit({
   id: true,
   created_at: true,
+  org_id: true,
+});
+export const insertCreditNoteSchema = createInsertSchema(credit_notes).omit({
+  id: true,
+  created_at: true,
+  org_id: true,
 });
 export const insertInventoryTransactionSchema = createInsertSchema(
   inventory_transactions
@@ -225,7 +279,6 @@ export const insertInventoryTransactionSchema = createInsertSchema(
   id: true,
   created_at: true,
   org_id: true,
-  store_id: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -242,6 +295,8 @@ export type InventoryTransaction = typeof inventory_transactions.$inferSelect;
 export type InsertInventoryTransaction = z.infer<
   typeof insertInventoryTransactionSchema
 >;
+export type CreditNote = typeof credit_notes.$inferSelect;
+export type InsertCreditNote = z.infer<typeof insertCreditNoteSchema>;
 
 // =============================
 // Multi-tenant RBAC + JWT tables
@@ -252,6 +307,27 @@ export const organizations = pgTable("organizations", {
     .primaryKey()
     .default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
+  // GST + Vendor Details for India
+  gst_number: text("gst_number"),
+  owner_name: text("owner_name"),
+  owner_phone: text("owner_phone"),
+  owner_email: text("owner_email"),
+  msme_number: text("msme_number"),
+  business_address: text("business_address"),
+  business_city: text("business_city"),
+  business_state: text("business_state"),
+  business_pin: text("business_pin"),
+  // Document Verification
+  kyc_status: text("kyc_status").default("pending"), // pending | verified | rejected
+  verified_at: timestamp("verified_at"),
+  verified_by: integer("verified_by").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  verification_notes: text("verification_notes"),
+  // Subscription
+  payment_status: text("payment_status").default("pending"), // pending | active | inactive
+  subscription_id: text("subscription_id"),
+  plan_name: text("plan_name").default("starter"),
   created_at: timestamp("created_at").notNull().defaultNow(),
 });
 

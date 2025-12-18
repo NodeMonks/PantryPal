@@ -13,6 +13,7 @@ import {
   ArrowLeft,
   Loader2,
   MapPin,
+  FileText,
 } from "lucide-react";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
@@ -40,7 +41,35 @@ const step2Schema = z.object({
     .min(1)
     .max(10),
 });
-const step3Schema = z
+// Step 3: GST/MSME/Vendor Details
+const step3Schema = z.object({
+  gst_number: z
+    .string()
+    .regex(
+      /^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}$/,
+      "Invalid GST format"
+    )
+    .optional()
+    .or(z.literal("")),
+  owner_name: z.string().min(2, "Owner name min 2 chars").optional(),
+  owner_phone: z
+    .string()
+    .regex(/^\+?[0-9\-() ]{7,20}$/, "Invalid phone")
+    .optional()
+    .or(z.literal("")),
+  owner_email: z.string().email("Invalid email").optional().or(z.literal("")),
+  msme_number: z.string().optional(),
+  business_address: z.string().optional(),
+  business_city: z.string().optional(),
+  business_state: z.string().optional(),
+  business_pin: z
+    .string()
+    .regex(/^\d{6}$/, "PIN must be 6 digits")
+    .optional()
+    .or(z.literal("")),
+});
+// Step 4: Admin Account
+const step4Schema = z
   .object({
     username: organizationRegistrationSchema.shape.admin.shape.username,
     email: organizationRegistrationSchema.shape.admin.shape.email,
@@ -57,6 +86,7 @@ const step3Schema = z
 type Step1Values = z.infer<typeof step1Schema>;
 type Step2Values = z.infer<typeof step2Schema>;
 type Step3Values = z.infer<typeof step3Schema>;
+type Step4Values = z.infer<typeof step4Schema>;
 
 interface RegisterWizardProps {
   token?: string;
@@ -117,9 +147,14 @@ export function RegisterWizard({
 
   const step3Form = useForm<Step3Values>({
     resolver: zodResolver(step3Schema),
+    mode: "onBlur",
+  });
+
+  const step4Form = useForm<Step4Values>({
+    resolver: zodResolver(step4Schema),
     defaultValues: {
       username: admin.username,
-      email: admin.email,
+      email: admin.email || prefillEmail,
       password: admin.password,
       confirmPassword: admin.confirmPassword,
       full_name: admin.full_name,
@@ -133,16 +168,16 @@ export function RegisterWizard({
     const sub1 = step1Form.watch(
       (v) => v.orgName !== undefined && setOrganizationName(v.orgName)
     );
-    const sub3 = step3Form.watch((v) =>
+    const sub4 = step4Form.watch((v) =>
       Object.entries(v).forEach(([k, val]) =>
         setAdminField(k as any, (val as string) || "")
       )
     );
     return () => {
       sub1.unsubscribe();
-      sub3.unsubscribe();
+      sub4.unsubscribe();
     };
-  }, [step1Form, step3Form, setOrganizationName, setAdminField]);
+  }, [step1Form, step4Form, setOrganizationName, setAdminField]);
 
   // Load stores from Zustand to RHF on mount/step change
   useEffect(() => {
@@ -212,6 +247,10 @@ export function RegisterWizard({
       }
       return;
     }
+    if (step === 3) {
+      if (await step3Form.trigger()) setStep(4);
+      return;
+    }
   };
   const prevStep = () => {
     if (step > 1) setStep((step - 1) as RegistrationStep);
@@ -220,14 +259,17 @@ export function RegisterWizard({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const submitOrganization = async () => {
-    if (!(await step3Form.trigger())) return;
+    if (!(await step4Form.trigger())) return;
     setSubmitting(true);
     setSubmitError("");
     try {
+      const vendorDetails = step3Form.getValues();
       const payload = buildPayload();
-      const requestBody = token
-        ? { ...payload, onboarding_token: token }
-        : payload;
+      const requestBody = {
+        ...payload,
+        vendorDetails,
+        ...(token && { onboarding_token: token }),
+      };
 
       const resp = await fetch("/api/auth/register-organization", {
         method: "POST",
@@ -240,6 +282,7 @@ export function RegisterWizard({
         return;
       }
       reset();
+      sessionStorage.removeItem("onboardingToken");
       navigate("/login");
     } catch (e: any) {
       setSubmitError(e.message || "Network error");
@@ -307,7 +350,7 @@ export function RegisterWizard({
             {/* Step Indicator */}
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 text-xs font-medium">
-                {[1, 2, 3].map((s) => (
+                {[1, 2, 3, 4].map((s) => (
                   <div
                     key={s}
                     className={`flex items-center gap-1 ${
@@ -323,7 +366,7 @@ export function RegisterWizard({
                     >
                       {s}
                     </div>
-                    {s < 3 && (
+                    {s < 4 && (
                       <div
                         className={`h-px w-6 ${
                           step > s ? "bg-orange-600" : "bg-border"
@@ -334,7 +377,7 @@ export function RegisterWizard({
                 ))}
               </div>
               <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                Step {step} of 3
+                Step {step} of 4
               </span>
             </div>
 
@@ -452,6 +495,99 @@ export function RegisterWizard({
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
+                  nextStep();
+                }}
+                className="space-y-5"
+              >
+                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                  <p className="text-sm text-orange-900">
+                    <strong>GST & Vendor Details:</strong> Help us identify your
+                    business for invoicing.
+                  </p>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <FieldInput
+                    id="gst_number"
+                    label="GST Number (optional)"
+                    placeholder="e.g., 18AABCT1234A1Z5"
+                    error={step3Form.formState.errors.gst_number?.message}
+                    register={step3Form.register("gst_number")}
+                  />
+                  <FieldInput
+                    id="owner_name"
+                    label="Owner Name (optional)"
+                    error={step3Form.formState.errors.owner_name?.message}
+                    register={step3Form.register("owner_name")}
+                  />
+                  <FieldInput
+                    id="owner_email"
+                    label="Owner Email (optional)"
+                    type="email"
+                    error={step3Form.formState.errors.owner_email?.message}
+                    register={step3Form.register("owner_email")}
+                  />
+                  <FieldInput
+                    id="owner_phone"
+                    label="Owner Phone (optional)"
+                    error={step3Form.formState.errors.owner_phone?.message}
+                    register={step3Form.register("owner_phone")}
+                  />
+                  <FieldInput
+                    id="msme_number"
+                    label="MSME Number (optional)"
+                    error={step3Form.formState.errors.msme_number?.message}
+                    register={step3Form.register("msme_number")}
+                  />
+                  <FieldInput
+                    id="business_city"
+                    label="City (optional)"
+                    error={step3Form.formState.errors.business_city?.message}
+                    register={step3Form.register("business_city")}
+                  />
+                  <FieldInput
+                    id="business_state"
+                    label="State (optional)"
+                    error={step3Form.formState.errors.business_state?.message}
+                    register={step3Form.register("business_state")}
+                  />
+                  <FieldInput
+                    id="business_pin"
+                    label="PIN Code (6 digits, optional)"
+                    error={step3Form.formState.errors.business_pin?.message}
+                    register={step3Form.register("business_pin")}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="business_address">
+                    Business Address (optional)
+                  </Label>
+                  <Input
+                    id="business_address"
+                    placeholder="Full address"
+                    {...step3Form.register("business_address")}
+                  />
+                </div>
+
+                <div className="flex justify-between">
+                  <Button type="button" variant="outline" onClick={prevStep}>
+                    <ArrowLeft className="h-4 w-4 mr-1" /> Back
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="bg-orange-600 hover:bg-orange-700"
+                  >
+                    Continue <ArrowRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              </form>
+            )}
+
+            {step === 4 && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
                   submitOrganization();
                 }}
                 className="space-y-5"
@@ -460,41 +596,41 @@ export function RegisterWizard({
                   <FieldInput
                     id="username"
                     label="Admin Username"
-                    error={step3Form.formState.errors.username?.message}
-                    register={step3Form.register("username")}
+                    error={step4Form.formState.errors.username?.message}
+                    register={step4Form.register("username")}
                   />
                   <FieldInput
                     id="email"
                     label="Admin Email"
                     type="email"
-                    error={step3Form.formState.errors.email?.message}
-                    register={step3Form.register("email")}
+                    error={step4Form.formState.errors.email?.message}
+                    register={step4Form.register("email")}
                   />
                   <FieldInput
                     id="full_name"
                     label="Full Name"
-                    error={step3Form.formState.errors.full_name?.message}
-                    register={step3Form.register("full_name")}
+                    error={step4Form.formState.errors.full_name?.message}
+                    register={step4Form.register("full_name")}
                   />
                   <FieldInput
                     id="phone"
                     label="Phone (optional)"
-                    error={step3Form.formState.errors.phone?.message}
-                    register={step3Form.register("phone")}
+                    error={step4Form.formState.errors.phone?.message}
+                    register={step4Form.register("phone")}
                   />
                   <FieldInput
                     id="password"
                     label="Password"
                     type="password"
-                    error={step3Form.formState.errors.password?.message}
-                    register={step3Form.register("password")}
+                    error={step4Form.formState.errors.password?.message}
+                    register={step4Form.register("password")}
                   />
                   <FieldInput
                     id="confirmPassword"
                     label="Confirm Password"
                     type="password"
-                    error={step3Form.formState.errors.confirmPassword?.message}
-                    register={step3Form.register("confirmPassword")}
+                    error={step4Form.formState.errors.confirmPassword?.message}
+                    register={step4Form.register("confirmPassword")}
                   />
                 </div>
                 {submitError && (
@@ -561,19 +697,21 @@ function FieldInput({
   id,
   label,
   type = "text",
+  placeholder,
   error,
   register,
 }: {
   id: string;
   label: string;
   type?: string;
+  placeholder?: string;
   error?: string;
   register: any;
 }) {
   return (
     <div className="space-y-2">
       <Label htmlFor={id}>{label}</Label>
-      <Input id={id} type={type} {...register} />
+      <Input id={id} type={type} placeholder={placeholder} {...register} />
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );

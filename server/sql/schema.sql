@@ -174,3 +174,11 @@ CREATE TABLE IF NOT EXISTS onboarding_tokens (
   org_id uuid REFERENCES organizations(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Performance indexes (multi-tenant)
+CREATE INDEX IF NOT EXISTS idx_products_org_id_barcode ON products(org_id, barcode);
+CREATE INDEX IF NOT EXISTS idx_bills_org_id_created_at ON bills(org_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bill_items_bill_id ON bill_items(bill_id);
+CREATE INDEX IF NOT EXISTS idx_customers_org_id_phone ON customers(org_id, phone);
+CREATE INDEX IF NOT EXISTS idx_inventory_transactions_product_id ON inventory_transactions(product_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_transactions_org_id ON inventory_transactions(org_id);

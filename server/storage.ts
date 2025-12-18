@@ -5,6 +5,7 @@ import {
   customers,
   bills,
   bill_items,
+  credit_notes,
   inventory_transactions,
   type User,
   type InsertUser,
@@ -16,6 +17,8 @@ import {
   type InsertBill,
   type BillItem,
   type InsertBillItem,
+  type CreditNote,
+  type InsertCreditNote,
   type InventoryTransaction,
   type InsertInventoryTransaction,
 } from "@shared/schema";
@@ -55,14 +58,28 @@ export interface IStorage {
   getBills(ctx: TenantContext): Promise<Bill[]>;
   getBillsForToday(ctx: TenantContext): Promise<Bill[]>;
   getBill(id: string, ctx: TenantContext): Promise<Bill | undefined>;
+  updateBill(
+    id: string,
+    bill: Partial<InsertBill>,
+    ctx: TenantContext
+  ): Promise<Bill | undefined>;
   createBill(bill: InsertBill, ctx: TenantContext): Promise<Bill>;
 
   // Bill item methods
-  getBillItems(billId: string, ctx: TenantContext): Promise<BillItem[]>;
+  getBillItems(
+    billId: string,
+    ctx: TenantContext
+  ): Promise<Array<BillItem & { product_name?: string }>>;
   createBillItem(
     billItem: InsertBillItem,
     ctx: TenantContext
   ): Promise<BillItem>;
+
+  getCreditNotes(billId: string, ctx: TenantContext): Promise<CreditNote[]>;
+  createCreditNote(
+    creditNote: InsertCreditNote,
+    ctx: TenantContext
+  ): Promise<CreditNote>;
 
   // Inventory transaction methods
   getInventoryTransactions(
@@ -243,6 +260,19 @@ export class DrizzleStorage implements IStorage {
     return result[0];
   }
 
+  async updateBill(
+    id: string,
+    bill: Partial<InsertBill>,
+    ctx: TenantContext
+  ): Promise<Bill | undefined> {
+    const result = await db
+      .update(bills)
+      .set(bill as any)
+      .where(and(eq(bills.id, id), eq(bills.org_id, ctx.orgId)))
+      .returning();
+    return result[0];
+  }
+
   async createBill(bill: InsertBill, ctx: TenantContext): Promise<Bill> {
     const result = await db
       .insert(bills)
@@ -255,11 +285,15 @@ export class DrizzleStorage implements IStorage {
   }
 
   // Bill item methods
-  async getBillItems(billId: string, ctx: TenantContext): Promise<BillItem[]> {
+  async getBillItems(
+    billId: string,
+    ctx: TenantContext
+  ): Promise<Array<BillItem & { product_name?: string }>> {
     // Join with bills to ensure tenant isolation
     return await db
       .select({
         id: bill_items.id,
+        org_id: (bill_items as any).org_id,
         bill_id: bill_items.bill_id,
         product_id: bill_items.product_id,
         product_name: (products as any).name,
@@ -282,6 +316,33 @@ export class DrizzleStorage implements IStorage {
     const result = await db
       .insert(bill_items)
       .values({ ...(billItem as any), org_id: ctx.orgId } as any)
+      .returning();
+    return result[0];
+  }
+
+  async getCreditNotes(
+    billId: string,
+    ctx: TenantContext
+  ): Promise<CreditNote[]> {
+    return await db
+      .select()
+      .from(credit_notes)
+      .where(
+        and(
+          eq(credit_notes.bill_id, billId),
+          eq(credit_notes.org_id, ctx.orgId)
+        )
+      )
+      .orderBy(desc(credit_notes.created_at));
+  }
+
+  async createCreditNote(
+    creditNote: InsertCreditNote,
+    ctx: TenantContext
+  ): Promise<CreditNote> {
+    const result = await db
+      .insert(credit_notes)
+      .values({ ...(creditNote as any), org_id: ctx.orgId } as any)
       .returning();
     return result[0];
   }

@@ -95,10 +95,24 @@ export function setupAuthRoutes(app: Express) {
         return res.status(400).json({ error: "Email already exists" });
       }
 
-      // Create organization
+      // Create organization with vendor details
+      const vendor = req.body.vendorDetails || {};
       const [org] = await db
         .insert(organizations)
-        .values({ name: parsed.organization.name })
+        .values({
+          name: parsed.organization.name,
+          gst_number: vendor.gst_number || null,
+          owner_name: vendor.owner_name || null,
+          owner_phone: vendor.owner_phone || null,
+          owner_email: vendor.owner_email || null,
+          msme_number: vendor.msme_number || null,
+          business_address: vendor.business_address || null,
+          business_city: vendor.business_city || null,
+          business_state: vendor.business_state || null,
+          business_pin: vendor.business_pin || null,
+          kyc_status: "pending", // Requires admin verification
+          payment_status: "pending", // Set from Razorpay webhook later
+        })
         .returning();
 
       // Create stores

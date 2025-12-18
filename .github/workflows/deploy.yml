@@ -8,7 +8,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+    env:
+      RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -47,7 +48,5 @@ jobs:
       
       # Optional: Deploy to Render/Railway via webhook
       - name: Trigger Render Deploy
-        if: env.RENDER_DEPLOY_HOOK != ''
-        run: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
-        env:
-          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        if: ${{ env.RENDER_DEPLOY_HOOK != 'https://api.render.com/deploy/srv-d4g6fca4d50c73f801s0?key=eyZdurIEiko' }}
+        run: curl -X POST "$RENDER_DEPLOY_HOOK"

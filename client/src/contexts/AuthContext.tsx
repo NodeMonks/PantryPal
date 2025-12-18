@@ -14,6 +14,7 @@ interface User {
   full_name?: string;
   phone?: string;
   is_active: boolean;
+  org_id?: string;
 }
 
 interface AuthContextType {
