@@ -9,6 +9,8 @@ export default defineConfig({
     include: ["tests/unit/**/*.test.ts", "tests/integration/**/*.test.ts"],
     exclude: ["tests/e2e/**/*", "node_modules/**/*"],
     reporters: ["default", "./tests/reporter.ts"],
+    hookTimeout: 30000, // Increase from 10s to 30s for DB setup operations
+    testTimeout: 15000, // Increase test timeout to 15s
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],

@@ -17,6 +17,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { useBillStore } from "@/stores/billStore";
+import { useAuth } from "@/contexts/AuthContext";
 import { api, type Bill, type BillItem } from "@/lib/api";
 import { Link } from "react-router-dom";
 import { Plus, Search, Receipt, IndianRupee, Eye } from "lucide-react";
@@ -30,10 +32,10 @@ import {
 } from "@/components/ui/dialog";
 
 export default function Billing() {
-  const [bills, setBills] = useState<Bill[]>([]);
+  const { user } = useAuth();
+  const billStore = useBillStore();
   const [filteredBills, setFilteredBills] = useState<Bill[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [loading, setLoading] = useState(true);
   const [viewOpen, setViewOpen] = useState(false);
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
   const [items, setItems] = useState<BillItem[]>([]);
@@ -41,35 +43,20 @@ export default function Billing() {
   const { toast } = useToast();
 
   useEffect(() => {
-    loadBills();
-  }, []);
+    if (user?.org_id) {
+      billStore.loadBills(user.org_id);
+    }
+  }, [user?.org_id, billStore]);
 
   useEffect(() => {
-    const filtered = bills.filter(
-      (bill) =>
+    const filtered = billStore.bills.filter(
+      (bill: Bill) =>
         bill.bill_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (bill.customer_id &&
           bill.customer_id.toLowerCase().includes(searchTerm.toLowerCase()))
     );
     setFilteredBills(filtered);
-  }, [bills, searchTerm]);
-
-  const loadBills = async () => {
-    try {
-      setLoading(true);
-      const billsData = await api.getBills();
-      setBills(billsData);
-    } catch (error) {
-      console.error("Error loading bills:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load bills",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [billStore.bills, searchTerm]);
 
   const handleViewBill = async (bill: Bill) => {
     setSelectedBill(bill);
@@ -114,7 +101,7 @@ export default function Billing() {
     });
   };
 
-  if (loading) {
+  if (billStore.loading) {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
@@ -150,7 +137,7 @@ export default function Billing() {
             <CardTitle className="text-sm">Total Bills</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{bills.length}</div>
+            <div className="text-2xl font-bold">{billStore.bills.length}</div>
           </CardContent>
         </Card>
 
@@ -161,7 +148,7 @@ export default function Billing() {
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
               {
-                bills.filter((bill) => {
+                billStore.bills.filter((bill: Bill) => {
                   const billDate = new Date(bill.created_at).toDateString();
                   const today = new Date().toDateString();
                   return billDate === today;
@@ -178,8 +165,11 @@ export default function Billing() {
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
               ₹
-              {bills
-                .reduce((sum, bill) => sum + Number(bill.final_amount), 0)
+              {billStore.bills
+                .reduce(
+                  (sum: number, bill: Bill) => sum + Number(bill.final_amount),
+                  0
+                )
                 .toLocaleString()}
             </div>
           </CardContent>
@@ -192,12 +182,13 @@ export default function Billing() {
           <CardContent>
             <div className="text-2xl font-bold text-purple-600">
               ₹
-              {bills.length > 0
+              {billStore.bills.length > 0
                 ? Math.round(
-                    bills.reduce(
-                      (sum, bill) => sum + Number(bill.final_amount),
+                    billStore.bills.reduce(
+                      (sum: number, bill: Bill) =>
+                        sum + Number(bill.final_amount),
                       0
-                    ) / bills.length
+                    ) / billStore.bills.length
                   )
                 : 0}
             </div>
@@ -231,7 +222,7 @@ export default function Billing() {
         <CardHeader>
           <CardTitle>Recent Bills</CardTitle>
           <CardDescription>
-            {filteredBills.length} of {bills.length} bills
+            {filteredBills.length} of {billStore.bills.length} bills
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -1,79 +1,94 @@
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Textarea } from "@/components/ui/textarea"
-import { api, type Customer } from "@/lib/api"
-import { Plus, Search, Users, Phone, Mail, MapPin } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { useCustomerStore } from "@/stores/customerStore";
+import { useAuth } from "@/contexts/AuthContext";
+import { api, type Customer } from "@/lib/api";
+import { Plus, Search, Users, Phone, Mail, MapPin } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Customers() {
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([])
-  const [searchTerm, setSearchTerm] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const { user } = useAuth();
+  const customerStore = useCustomerStore();
+  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
     email: "",
-    address: ""
-  })
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const { toast } = useToast()
+    address: "",
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
-    loadCustomers()
-  }, [])
+    if (user?.org_id) {
+      customerStore.loadCustomers(user.org_id);
+    }
+  }, [user?.org_id, customerStore]);
 
   useEffect(() => {
-    const filtered = customers.filter(customer =>
-      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (customer.phone && customer.phone.includes(searchTerm)) ||
-      (customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase()))
-    )
-    setFilteredCustomers(filtered)
-  }, [customers, searchTerm])
+    const filtered = customerStore.customers.filter(
+      (customer) =>
+        customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (customer.phone && customer.phone.includes(searchTerm)) ||
+        (customer.email &&
+          customer.email.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+    setFilteredCustomers(filtered);
+  }, [customerStore.customers, searchTerm]);
 
   const loadCustomers = async () => {
-    try {
-      setLoading(true)
-      const customersData = await api.getCustomers()
-      setCustomers(customersData)
-    } catch (error) {
-      console.error('Error loading customers:', error)
-      toast({
-        title: "Error",
-        description: "Failed to load customers",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
+    if (user?.org_id) {
+      await customerStore.loadCustomers(user.org_id);
     }
-  }
+  };
 
   const handleInputChange = (field: string, value: string) => {
     // Validate phone number to only allow digits, spaces, +, and -
     if (field === "phone") {
-      const sanitized = value.replace(/[^0-9+\-\s]/g, "")
-      setFormData(prev => ({ ...prev, [field]: sanitized }))
+      const sanitized = value.replace(/[^0-9+\-\s]/g, "");
+      setFormData((prev) => ({ ...prev, [field]: sanitized }));
     } else {
-      setFormData(prev => ({ ...prev, [field]: value }))
+      setFormData((prev) => ({ ...prev, [field]: value }));
     }
-  }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (!formData.name.trim()) {
       toast({
         title: "Error",
         description: "Customer name is required",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     // Validate email format if provided
@@ -82,65 +97,70 @@ export default function Customers() {
         title: "Error",
         description: "Please enter a valid email address",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     // Validate phone format if provided (10-15 digits)
-    if (formData.phone && !formData.phone.replace(/[\s+\-]/g, "").match(/^\d{10,15}$/)) {
+    if (
+      formData.phone &&
+      !formData.phone.replace(/[\s+\-]/g, "").match(/^\d{10,15}$/)
+    ) {
       toast({
         title: "Error",
         description: "Please enter a valid phone number (10-15 digits)",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
-    setIsSubmitting(true)
+    setIsSubmitting(true);
     try {
-      await api.createCustomer({
+      await customerStore.createCustomer({
         name: formData.name,
         phone: formData.phone || null,
         email: formData.email || null,
         address: formData.address || null,
-      })
+      } as any);
 
       toast({
         title: "Success",
         description: "Customer added successfully!",
-      })
-      
-      setIsDialogOpen(false)
-      setFormData({ name: "", phone: "", email: "", address: "" })
-      loadCustomers()
+      });
+
+      setIsDialogOpen(false);
+      setFormData({ name: "", phone: "", email: "", address: "" });
+      loadCustomers();
     } catch (error) {
-      console.error("Error adding customer:", error)
+      console.error("Error adding customer:", error);
       toast({
         title: "Error",
         description: "Failed to add customer",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-IN')
-  }
+    return new Date(dateString).toLocaleDateString("en-IN");
+  };
 
-  if (loading) {
+  if (customerStore.loading) {
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Customers</h1>
-            <p className="text-muted-foreground">Manage your customer database</p>
+            <p className="text-muted-foreground">
+              Manage your customer database
+            </p>
           </div>
         </div>
         <div className="text-center py-8">Loading customers...</div>
       </div>
-    )
+    );
   }
 
   return (
@@ -150,7 +170,7 @@ export default function Customers() {
           <h1 className="text-3xl font-bold text-foreground">Customers</h1>
           <p className="text-muted-foreground">Manage your customer database</p>
         </div>
-        
+
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -207,10 +227,18 @@ export default function Customers() {
                 />
               </div>
               <div className="flex gap-2">
-                <Button type="submit" disabled={isSubmitting} className="flex-1">
+                <Button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1"
+                >
                   {isSubmitting ? "Adding..." : "Add Customer"}
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsDialogOpen(false)}
+                >
                   Cancel
                 </Button>
               </div>
@@ -226,7 +254,9 @@ export default function Customers() {
             <CardTitle className="text-sm">Total Customers</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{customers.length}</div>
+            <div className="text-2xl font-bold">
+              {customerStore.customers.length}
+            </div>
           </CardContent>
         </Card>
 
@@ -236,7 +266,7 @@ export default function Customers() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              {customers.filter(c => c.phone).length}
+              {customerStore.customers.filter((c) => c.phone).length}
             </div>
           </CardContent>
         </Card>
@@ -247,7 +277,7 @@ export default function Customers() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {customers.filter(c => c.email).length}
+              {customerStore.customers.filter((c) => c.email).length}
             </div>
           </CardContent>
         </Card>
@@ -279,13 +309,16 @@ export default function Customers() {
         <CardHeader>
           <CardTitle>Customer List</CardTitle>
           <CardDescription>
-            {filteredCustomers.length} of {customers.length} customers
+            {filteredCustomers.length} of {customerStore.customers.length}{" "}
+            customers
           </CardDescription>
         </CardHeader>
         <CardContent>
           {filteredCustomers.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              {searchTerm ? "No customers found matching your search." : "No customers added yet."}
+              {searchTerm
+                ? "No customers found matching your search."
+                : "No customers added yet."}
               {!searchTerm && (
                 <div className="mt-4">
                   <Button onClick={() => setIsDialogOpen(true)}>
@@ -330,7 +363,9 @@ export default function Customers() {
                             </div>
                           )}
                           {!customer.phone && !customer.email && (
-                            <span className="text-muted-foreground text-sm">No contact info</span>
+                            <span className="text-muted-foreground text-sm">
+                              No contact info
+                            </span>
                           )}
                         </div>
                       </TableCell>
@@ -338,14 +373,20 @@ export default function Customers() {
                         {customer.address ? (
                           <div className="flex items-start gap-2 text-sm">
                             <MapPin className="h-3 w-3 text-muted-foreground mt-0.5" />
-                            <span className="max-w-xs truncate">{customer.address}</span>
+                            <span className="max-w-xs truncate">
+                              {customer.address}
+                            </span>
                           </div>
                         ) : (
-                          <span className="text-muted-foreground text-sm">No address</span>
+                          <span className="text-muted-foreground text-sm">
+                            No address
+                          </span>
                         )}
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm">{formatDate(customer.created_at)}</span>
+                        <span className="text-sm">
+                          {formatDate(customer.created_at)}
+                        </span>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -356,5 +397,5 @@ export default function Customers() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

@@ -15,16 +15,17 @@ const STORES = {
 
 type StoreName = keyof typeof STORES;
 
-type ProductCache = {
+export type ProductCache = {
   id: string;
   orgId: string;
   storeId: string;
   name: string;
   barcode?: string | null;
+  qr_code?: string | null;
   updatedAt: number;
 };
 
-type CustomerCache = {
+export type CustomerCache = {
   id: string;
   orgId: string;
   storeId: string;
@@ -33,7 +34,7 @@ type CustomerCache = {
   updatedAt: number;
 };
 
-type BillCache = {
+export type BillCache = {
   id: string;
   orgId: string;
   storeId: string;
@@ -41,7 +42,7 @@ type BillCache = {
   createdAt: number;
 };
 
-type ScanEntry = {
+export type ScanEntry = {
   code: string;
   type: "barcode" | "qr";
   orgId: string;
@@ -171,6 +172,24 @@ export const cache = {
   putBills(items: BillCache[]) {
     return withStore("bills", "readwrite", async (s) => {
       for (const it of items) s.put(it);
+    });
+  },
+  getBills(scope: TenantScope): Promise<BillCache[]> {
+    return withStore("bills", "readonly", async (s) => {
+      const idx = s.index("org_store");
+      const range = IDBKeyRange.only([scope.orgId, scope.storeId]);
+      return new Promise((resolve) => {
+        const res: BillCache[] = [];
+        const cursorReq = idx.openCursor(range);
+        cursorReq.onsuccess = () => {
+          const cursor = cursorReq.result;
+          if (cursor) {
+            res.push(cursor.value as BillCache);
+            cursor.continue();
+          } else resolve(res);
+        };
+        cursorReq.onerror = () => resolve(res);
+      });
     });
   },
 

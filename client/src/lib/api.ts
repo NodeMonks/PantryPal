@@ -13,6 +13,7 @@ export interface Product {
   unit: string | null;
   expiry_date: string | null;
   qr_code: string | null;
+  qr_code_image?: string | null;
   created_at: string;
   description?: string | null;
   manufacturing_date?: string | null;
@@ -115,7 +116,7 @@ class ApiClient {
   }
 
   // Products
-  async getProducts(): Promise<Product[]> {
+  async getProducts(orgId?: string): Promise<Product[]> {
     return this.get<Product[]>("/products");
   }
 
@@ -150,8 +151,23 @@ class ApiClient {
     return this.put<Product>(`/products/${id}`, product);
   }
 
+  async deleteProduct(id: string): Promise<void> {
+    await fetch(`${API_BASE}/products/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+  }
+
+  async getLowStockProducts(orgId?: string): Promise<Product[]> {
+    return this.get<Product[]>("/inventory/low-stock");
+  }
+
+  async getExpiringProducts(orgId?: string): Promise<Product[]> {
+    return this.get<Product[]>("/inventory/expiring");
+  }
+
   // Customers
-  async getCustomers(): Promise<Customer[]> {
+  async getCustomers(orgId?: string): Promise<Customer[]> {
     return this.get<Customer[]>("/customers");
   }
 
@@ -159,8 +175,22 @@ class ApiClient {
     return this.post<Customer>("/customers", customer);
   }
 
+  async updateCustomer(
+    id: string,
+    customer: Partial<Customer>
+  ): Promise<Customer> {
+    return this.put<Customer>(`/customers/${id}`, customer);
+  }
+
+  async deleteCustomer(id: string): Promise<void> {
+    await fetch(`${API_BASE}/customers/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+  }
+
   // Bills
-  async getBills(): Promise<Bill[]> {
+  async getBills(orgId?: string): Promise<Bill[]> {
     return this.get<Bill[]>("/bills");
   }
 
@@ -172,8 +202,41 @@ class ApiClient {
     return this.post<Bill>("/bills", bill);
   }
 
+  async updateBill(id: string, bill: Partial<Bill>): Promise<Bill> {
+    return this.put<Bill>(`/bills/${id}`, bill);
+  }
+
+  async deleteBill(id: string): Promise<void> {
+    await fetch(`${API_BASE}/bills/${id}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+  }
+
   async getBillItems(billId: string): Promise<BillItem[]> {
     return this.get<BillItem[]>(`/bills/${encodeURIComponent(billId)}/items`);
+  }
+
+  // Inventory
+  async recordStockIn(
+    orgId: string,
+    data: { product_id: string; quantity: number }
+  ): Promise<any> {
+    return this.post(`/inventory/stock-in`, data);
+  }
+
+  async recordStockOut(
+    orgId: string,
+    data: { product_id: string; quantity: number }
+  ): Promise<any> {
+    return this.post(`/inventory/stock-out`, data);
+  }
+
+  async adjustStock(
+    orgId: string,
+    data: { product_id: string; delta: number; reason: string }
+  ): Promise<any> {
+    return this.post(`/inventory/adjust`, data);
   }
 
   // Dashboard

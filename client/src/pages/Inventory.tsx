@@ -26,17 +26,10 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { api, type Product } from "@/lib/api";
-import { cache, shouldEnableIndexedDb } from "@/lib/indexeddb";
+import { useProductStore } from "@/stores/productStore";
 import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "react-router-dom";
-import {
-  Plus,
-  Search,
-  Package,
-  QrCode,
-  ArrowUpDown,
-  Trash2,
-} from "lucide-react";
+import { Plus, Search, QrCode, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -48,42 +41,54 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function Inventory() {
   const { user } = useAuth();
-  const [products, setProducts] = useState<Product[]>([]);
+  const productStore = useProductStore();
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-  const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const { toast } = useToast();
 
+  // Load products from store when org_id changes
   useEffect(() => {
-    loadProducts();
-  }, []);
+    if (user?.org_id) {
+      productStore.loadProducts(user.org_id);
+    }
+  }, [user?.org_id, productStore]);
 
+  // Filter and sort products
   useEffect(() => {
-    let filtered = products.filter(
-      (product) =>
+    let filtered = productStore.products.filter(
+      (product: Product) =>
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.brand &&
           product.brand.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
-    // Category filter
+    // Apply category filter
     if (categoryFilter !== "all") {
       filtered = filtered.filter(
-        (product) => product.category === categoryFilter
+        (product: Product) => product.category === categoryFilter
       );
     }
 
-    // Sorting
-    filtered.sort((a, b) => {
+    // Sort products
+    filtered.sort((a: Product, b: Product) => {
       let aValue: any = a[sortBy as keyof Product];
       let bValue: any = b[sortBy as keyof Product];
 
@@ -104,42 +109,7 @@ export default function Inventory() {
     });
 
     setFilteredProducts(filtered);
-  }, [products, searchTerm, categoryFilter, sortBy, sortOrder]);
-
-  const loadProducts = async () => {
-    try {
-      setLoading(true);
-      const products = await api.getProducts();
-      setProducts(products);
-      // Cache in IndexedDB for prod environment
-      if (shouldEnableIndexedDb() && (user as any)?.orgId) {
-        const items = products.map((p) => ({
-          id: p.id,
-          orgId: (user as any).orgId,
-          // Store is deprecated in org-only mode; keep empty string for type compatibility
-          storeId: "",
-          name: p.name,
-          barcode: p.barcode ?? null,
-          updatedAt: Date.now(),
-        }));
-        cache.putProducts(items).catch(() => {});
-      }
-    } catch (error) {
-      console.error("Error loading products:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load products",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Get unique categories from products
-  const categories = Array.from(
-    new Set(products.map((p) => p.category))
-  ).sort();
+  }, [productStore.products, searchTerm, categoryFilter, sortBy, sortOrder]);
 
   const getStockStatus = (product: Product) => {
     const stock = product.quantity_in_stock || 0;
@@ -174,17 +144,48 @@ export default function Inventory() {
 
   const generateQRCode = async (productId: string) => {
     try {
-      // This would typically generate a QR code image
-      // For now, we'll just show the QR code text
-      const product = products.find((p) => p.id === productId);
-      if (product) {
-        toast({
-          title: "QR Code",
-          description: `QR Code: ${product.qr_code}`,
-        });
+      const response = await fetch(`/api/products/${productId}/generate-qr`, {
+        method: "POST",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate QR code");
       }
+
+      await response.json();
+
+      // Refresh product list to show new QR code
+      await productStore.fetchProducts();
+
+      const product = productStore.products.find(
+        (p: Product) => p.id === productId
+      );
+      if (product) {
+        setSelectedProduct(product);
+        setQrDialogOpen(true);
+      }
+
+      toast({
+        title: "QR Code Generated",
+        description: "QR code has been generated and saved for this product",
+      });
     } catch (error) {
       console.error("Error generating QR code:", error);
+      toast({
+        title: "Error",
+        description: "Failed to generate QR code",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const viewQRCode = (product: Product) => {
+    if (product.qr_code_image) {
+      setSelectedProduct(product);
+      setQrDialogOpen(true);
+    } else {
+      void generateQRCode(product.id);
     }
   };
 
@@ -197,20 +198,13 @@ export default function Inventory() {
     if (!productToDelete) return;
 
     try {
-      const response = await fetch(`/api/products/${productToDelete.id}`, {
-        method: "DELETE",
-        credentials: "include",
+      await productStore.deleteProduct(productToDelete.id);
+      toast({
+        title: "Success",
+        description: "Product deleted successfully",
       });
-
-      if (response.ok) {
-        toast({
-          title: "Success",
-          description: "Product deleted successfully",
-        });
-        loadProducts();
-      } else {
-        throw new Error("Failed to delete product");
-      }
+      setDeleteDialogOpen(false);
+      setProductToDelete(null);
     } catch (error) {
       console.error("Error deleting product:", error);
       toast({
@@ -218,11 +212,12 @@ export default function Inventory() {
         description: "Failed to delete product",
         variant: "destructive",
       });
-    } finally {
-      setDeleteDialogOpen(false);
-      setProductToDelete(null);
     }
   };
+
+  const categories = Array.from(
+    new Set(productStore.products.map((p: Product) => p.category))
+  ).sort();
 
   return (
     <div className="space-y-6">
@@ -274,7 +269,7 @@ export default function Inventory() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Categories</SelectItem>
-                    {categories.map((cat) => (
+                    {categories.map((cat: string) => (
                       <SelectItem key={cat} value={cat}>
                         {cat}
                       </SelectItem>
@@ -326,7 +321,9 @@ export default function Inventory() {
             <CardTitle className="text-sm">Total Products</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{products.length}</div>
+            <div className="text-2xl font-bold">
+              {productStore.products.length}
+            </div>
             <p className="text-xs text-muted-foreground mt-1">
               Showing {filteredProducts.length} filtered
             </p>
@@ -352,8 +349,9 @@ export default function Inventory() {
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">
               {
-                products.filter(
-                  (p) => (p.quantity_in_stock || 0) <= (p.min_stock_level || 0)
+                productStore.products.filter(
+                  (p: Product) =>
+                    (p.quantity_in_stock || 0) <= (p.min_stock_level || 0)
                 ).length
               }
             </div>
@@ -367,11 +365,11 @@ export default function Inventory() {
         <CardHeader>
           <CardTitle>Products</CardTitle>
           <CardDescription>
-            {filteredProducts.length} of {products.length} products
+            {filteredProducts.length} of {productStore.products.length} products
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {productStore.loading ? (
             <div className="text-center py-8">Loading products...</div>
           ) : filteredProducts.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
@@ -393,7 +391,7 @@ export default function Inventory() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredProducts.map((product) => {
+                  {filteredProducts.map((product: Product) => {
                     const stockStatus = getStockStatus(product);
                     const expiryStatus = getExpiryStatus(
                       product.expiry_date || undefined
@@ -468,7 +466,12 @@ export default function Inventory() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => generateQRCode(product.id)}
+                              onClick={() => viewQRCode(product)}
+                              title={
+                                product.qr_code_image
+                                  ? "View QR Code"
+                                  : "Generate QR Code"
+                              }
                             >
                               <QrCode className="h-4 w-4" />
                             </Button>
@@ -477,62 +480,6 @@ export default function Inventory() {
                                 Edit
                               </Link>
                             </Button>
-                            {/** Archive/Unarchive **/}
-                            {(product as any).is_active ?? true ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={async () => {
-                                  try {
-                                    const resp = await fetch(
-                                      `/api/products/${product.id}/archive`,
-                                      {
-                                        method: "PATCH",
-                                        credentials: "include",
-                                      }
-                                    );
-                                    if (!resp.ok)
-                                      throw new Error("Archive failed");
-                                    toast({ title: "Product archived" });
-                                    loadProducts();
-                                  } catch (e) {
-                                    toast({
-                                      title: "Archive failed",
-                                      variant: "destructive",
-                                    });
-                                  }
-                                }}
-                              >
-                                Archive
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={async () => {
-                                  try {
-                                    const resp = await fetch(
-                                      `/api/products/${product.id}/unarchive`,
-                                      {
-                                        method: "PATCH",
-                                        credentials: "include",
-                                      }
-                                    );
-                                    if (!resp.ok)
-                                      throw new Error("Restore failed");
-                                    toast({ title: "Product restored" });
-                                    loadProducts();
-                                  } catch (e) {
-                                    toast({
-                                      title: "Restore failed",
-                                      variant: "destructive",
-                                    });
-                                  }
-                                }}
-                              >
-                                Restore
-                              </Button>
-                            )}
                             <Button
                               variant="outline"
                               size="sm"
@@ -575,6 +522,57 @@ export default function Inventory() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* QR Code Display Dialog */}
+      <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>QR Code for {selectedProduct?.name}</DialogTitle>
+            <DialogDescription>
+              Scan this QR code to quickly add this product to bills
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center space-y-4 py-4">
+            {selectedProduct?.qr_code_image ? (
+              <>
+                <img
+                  src={selectedProduct.qr_code_image}
+                  alt={`QR Code for ${selectedProduct.name}`}
+                  className="w-64 h-64 border rounded-lg"
+                />
+                <div className="text-sm text-muted-foreground text-center space-y-1">
+                  <div>
+                    QR Code: {selectedProduct.qr_code || selectedProduct.id}
+                  </div>
+                  <div>Product: {selectedProduct.name}</div>
+                  <div>Price: ₹{selectedProduct.mrp}</div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (!selectedProduct?.qr_code_image) return;
+                      const link = document.createElement("a");
+                      link.href = selectedProduct.qr_code_image;
+                      link.download = `QR-${selectedProduct.name}.png`;
+                      link.click();
+                    }}
+                  >
+                    Download
+                  </Button>
+                  <Button variant="outline" onClick={() => window.print()}>
+                    Print
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="text-center text-muted-foreground">
+                No QR code generated yet. Click Generate to create one.
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

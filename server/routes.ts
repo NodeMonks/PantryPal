@@ -1,361 +1,266 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { isAuthenticated, hasRole } from "./auth";
+import { isAuthenticated } from "./auth";
 import { requireOrgId } from "./middleware/tenantContext";
+import { asyncHandler } from "./middleware/errorHandler";
+import { requireRole } from "./middleware/rbac";
+import {
+  productService,
+  inventoryService,
+  billingService,
+  customerService,
+} from "./services";
+import {
+  createProductRequestSchema,
+  updateProductRequestSchema,
+  createCustomerRequestSchema,
+  createBillRequestSchema,
+  addBillItemRequestSchema,
+  createCreditNoteRequestSchema,
+} from "./models/dtos";
+import { validateRequestBody } from "./middleware/validation";
 import dotenv from "dotenv";
+import type { SQL } from "drizzle-orm";
+import { z } from "zod";
 
 dotenv.config();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Barcode/QR Code Search API - Fast product lookup by code
-  app.get("/api/products/search/:code", isAuthenticated, async (req, res) => {
-    try {
+  app.get(
+    "/api/products/search/:code",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
       const { code } = req.params;
-
-      // Log session and user data for debugging
-      console.log("🔍 Search request for code:", code);
-      console.log("👤 req.user:", req.user);
-      console.log("🍪 req.session:", req.session);
-
-      let orgId: string | undefined;
-
-      // Try to get orgId and storeId, handle missing gracefully
-      try {
-        orgId = requireOrgId(req);
-        console.log("✅ orgId:", orgId);
-      } catch (e: any) {
-        console.error("❌ Missing orgId:", e.message);
-        return res.status(401).json({
-          error: "Organization context not available. Please log in again.",
-          details: e.message,
-        });
+      const orgId = requireOrgId(req);
+      const product = await productService.searchByCode(code, orgId);
+      if (!product) {
+        return res.status(404).json({ error: "Product not found", code });
       }
-
-      // Org-only tenancy: storeId not required
-
-      const { db } = await import("./db");
-      const { products } = await import("../shared/schema");
-      const { and, eq, or } = await import("drizzle-orm");
-
-      // Build code match condition
-      // Only search by ID if the code looks like a UUID (contains dashes and right length)
-      const isUuidLike =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          code
-        );
-
-      const codeConditions = [
-        eq(products.barcode, code),
-        eq(products.qr_code, code),
-      ];
-
-      if (isUuidLike) {
-        codeConditions.push(eq(products.id, code));
-      }
-
-      const codeMatch = or(...codeConditions);
-
-      // Build where clause based on available context
-      const whereConditions = [eq(products.org_id, orgId), codeMatch];
-
-      // Search by barcode, QR code, or product ID
-      const [product] = await db
-        .select()
-        .from(products)
-        .where(and(...whereConditions))
-        .limit(1);
-
-      if (product) {
-        console.log("✅ Product found:", product.name);
-        res.json(product);
-      } else {
-        console.log("❌ Product not found for code:", code);
-        res.status(404).json({ error: "Product not found", code });
-      }
-    } catch (error: any) {
-      console.error("❌ Error searching product by code:", error);
-      console.error("Stack trace:", error.stack);
-      res
-        .status(500)
-        .json({ error: "Failed to search product", details: error.message });
-    }
-  });
+      res.json(product);
+    })
+  );
 
   // Quick action: Update stock quantity
   app.patch(
     "/api/products/:id/stock",
     isAuthenticated,
-    hasRole("admin", "store_manager", "inventory_manager"),
-    async (req, res) => {
-      try {
-        const orgId = requireOrgId(req);
-        const product = await storage.deleteProduct(req.params.id, {
-          orgId,
-        });
-        if (!product) {
-          return res.status(404).json({ error: "Product not found" });
-        }
-        res.json({ message: "Product deleted successfully", product });
+    requireRole("admin", "store_manager", "inventory_manager"),
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const id = req.params.id;
+      const { operation, quantity } = req.body as {
+        operation: "set" | "add" | "subtract";
+        quantity: number;
+      };
 
-        // Handle FK violations gracefully: product referenced by bill_items
-        if (error?.code === "23503") {
-          return res.status(409).json({
-            error: "Product cannot be deleted",
-            details:
-              "This product is referenced in one or more bill items. Remove those references or archive the product instead.",
-          });
-        }
-        console.error("Error deleting product:", error);
-        res.status(500).json({ error: "Failed to delete product" });
-        switch (operation) {
-          case "set":
-            newQuantity = quantity;
-            break;
-          case "add":
-            newQuantity += quantity;
-            break;
-          case "subtract":
-            newQuantity = Math.max(0, newQuantity - quantity);
-            break;
-          default:
-            return res.status(400).json({
-              error: "Invalid operation. Use 'set', 'add', or 'subtract'",
-            });
-        }
-
-        const updatedProduct = await storage.updateProduct(
-          id,
-          { quantity_in_stock: newQuantity },
-          { orgId }
-        );
-
-        // Log inventory transaction
-        const transactionType =
-          operation === "add"
-            ? "in"
-            : operation === "subtract"
-            ? "out"
-            : "adjustment";
-        await storage.createInventoryTransaction(
-          {
-            product_id: id,
-            transaction_type: transactionType,
-            quantity: Math.abs(quantity),
-            reference_type: "adjustment",
-            notes: `Stock ${operation} via barcode scanner`,
-          },
-          { orgId }
-        );
-
-        res.json(updatedProduct);
-      } catch (error) {
-        console.error("Error updating stock:", error);
-        res.status(500).json({ error: "Failed to update stock" });
+      const product = await productService.getProduct(id, orgId);
+      if (!product) {
+        return res.status(404).json({ error: "Product not found" });
       }
-    }
+
+      const deltaQty = Number(quantity) || 0;
+      if (deltaQty < 0) {
+        return res.status(400).json({ error: "Quantity must be positive" });
+      }
+
+      const currentQty = Number(product.quantity_in_stock) || 0;
+      let delta: number;
+      switch (operation) {
+        case "set":
+          delta = (Number(quantity) || 0) - currentQty;
+          break;
+        case "add":
+          delta = Number(quantity) || 0;
+          break;
+        case "subtract":
+          delta = -(Number(quantity) || 0);
+          break;
+        default:
+          return res.status(400).json({
+            error: "Invalid operation. Use 'set', 'add', or 'subtract'",
+          });
+      }
+
+      const { product: updatedProduct } = await inventoryService.adjustStock(
+        id,
+        delta,
+        `Stock ${operation} via barcode scanner`,
+        orgId
+      );
+
+      res.json(updatedProduct);
+    })
   );
 
   // Products API - Different roles have different permissions
-  app.get("/api/products", isAuthenticated, async (req, res) => {
-    try {
+  app.get(
+    "/api/products",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
       const orgId = requireOrgId(req);
-      const products = await storage.getProducts({ orgId });
+      const products = await productService.listProducts(orgId);
       res.json(products);
-    } catch (error) {
-      console.error("Error fetching products:", error);
-      res.status(500).json({ error: "Failed to fetch products" });
-    }
-  });
+    })
+  );
 
-  app.get("/api/products/:id", isAuthenticated, async (req, res) => {
-    try {
+  app.get(
+    "/api/products/:id",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
       const orgId = requireOrgId(req);
-      const product = await storage.getProduct(req.params.id, {
-        orgId,
-      });
+      const product = await productService.getProduct(req.params.id, orgId);
       if (!product) {
         return res.status(404).json({ error: "Product not found" });
       }
       res.json(product);
-    } catch (error) {
-      console.error("Error fetching product:", error);
-      res.status(500).json({ error: "Failed to fetch product" });
-    }
-  });
+    })
+  );
 
   // Only admin and manager can create products
   app.post(
     "/api/products",
     isAuthenticated,
-    hasRole("admin", "store_manager"),
-    async (req, res) => {
-      try {
-        const orgId = requireOrgId(req);
-        // Convert empty date strings to null to avoid PostgreSQL errors
-        const productData = {
-          ...req.body,
-          manufacturing_date: req.body.manufacturing_date || null,
-          expiry_date: req.body.expiry_date || null,
-        };
-
-        const product = await storage.createProduct(productData, {
-          orgId,
-        });
-        res.status(201).json(product);
-      } catch (error) {
-        console.error("Error creating product:", error);
-        res.status(500).json({ error: "Failed to create product" });
+    requireRole("admin", "store_manager"),
+    // normalize empty date strings before validation
+    (req, _res, next) => {
+      if (req.body) {
+        if (req.body.manufacturing_date === "")
+          req.body.manufacturing_date = undefined;
+        if (req.body.expiry_date === "") req.body.expiry_date = undefined;
       }
-    }
+      next();
+    },
+    validateRequestBody(createProductRequestSchema),
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const product = await productService.createProduct(req.body, orgId);
+      res.status(201).json(product);
+    })
   );
 
   // Only admin and manager can update products
   app.put(
     "/api/products/:id",
     isAuthenticated,
-    hasRole("admin", "store_manager"),
-    async (req, res) => {
-      try {
-        const orgId = requireOrgId(req);
-        // Convert empty date strings to null to avoid PostgreSQL errors
-        const productData = {
-          ...req.body,
-          manufacturing_date: req.body.manufacturing_date || null,
-          expiry_date: req.body.expiry_date || null,
-        };
-
-        const product = await storage.updateProduct(
-          req.params.id,
-          productData,
-          { orgId }
-        );
-        if (!product) {
-          return res.status(404).json({ error: "Product not found" });
-        }
-        res.json(product);
-      } catch (error) {
-        console.error("Error updating product:", error);
-        res.status(500).json({ error: "Failed to update product" });
+    requireRole("admin", "store_manager"),
+    (req, _res, next) => {
+      if (req.body) {
+        if (req.body.manufacturing_date === "")
+          req.body.manufacturing_date = undefined;
+        if (req.body.expiry_date === "") req.body.expiry_date = undefined;
       }
-    }
+      next();
+    },
+    validateRequestBody(updateProductRequestSchema),
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const product = await productService.updateProduct(
+        req.params.id,
+        req.body,
+        orgId
+      );
+      if (!product) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      res.json(product);
+    })
   );
 
   // Only admin and manager can delete products
   app.delete(
     "/api/products/:id",
     isAuthenticated,
-    hasRole("admin", "store_manager"),
-    async (req, res) => {
-      try {
-        const orgId = requireOrgId(req);
-        const product = await storage.deleteProduct(req.params.id, {
-          orgId,
-        });
-        if (!product) {
-          return res.status(404).json({ error: "Product not found" });
-        }
-        res.json({ message: "Product deleted successfully", product });
-      } catch (error) {
-        console.error("Error deleting product:", error);
-        res.status(500).json({ error: "Failed to delete product" });
+    requireRole("admin", "store_manager"),
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const ok = await productService.deleteProduct(req.params.id, orgId);
+      if (!ok) {
+        return res.status(404).json({ error: "Product not found" });
       }
-    }
+      res.json({ message: "Product deleted successfully" });
+    })
   );
 
   // Archive product (soft delete)
   app.patch(
     "/api/products/:id/archive",
     isAuthenticated,
-    hasRole("admin", "store_manager"),
-    async (req, res) => {
-      try {
-        const orgId = requireOrgId(req);
-        const product = await storage.updateProduct(
-          req.params.id,
-          { is_active: false } as any,
-          { orgId }
-        );
-        if (!product) {
-          return res.status(404).json({ error: "Product not found" });
-        }
-        res.json({ message: "Product archived", product });
-      } catch (error) {
-        console.error("Error archiving product:", error);
-        res.status(500).json({ error: "Failed to archive product" });
+    requireRole("admin", "store_manager"),
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const product = await productService.updateProduct(
+        req.params.id,
+        { is_active: false } as any,
+        orgId
+      );
+      if (!product) {
+        return res.status(404).json({ error: "Product not found" });
       }
-    }
+      res.json({ message: "Product archived", product });
+    })
   );
 
   // Unarchive product (restore)
   app.patch(
     "/api/products/:id/unarchive",
     isAuthenticated,
-    hasRole("admin", "store_manager"),
-    async (req, res) => {
-      try {
-        const orgId = requireOrgId(req);
-        const product = await storage.updateProduct(
-          req.params.id,
-          { is_active: true } as any,
-          { orgId }
-        );
-        if (!product) {
-          return res.status(404).json({ error: "Product not found" });
-        }
-        res.json({ message: "Product restored", product });
-      } catch (error) {
-        console.error("Error restoring product:", error);
-        res.status(500).json({ error: "Failed to restore product" });
+    requireRole("admin", "store_manager"),
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const product = await productService.updateProduct(
+        req.params.id,
+        { is_active: true } as any,
+        orgId
+      );
+      if (!product) {
+        return res.status(404).json({ error: "Product not found" });
       }
-    }
+      res.json({ message: "Product restored", product });
+    })
   );
 
   // Customers API - All authenticated users can view
-  app.get("/api/customers", isAuthenticated, async (req, res) => {
-    try {
+  app.get(
+    "/api/customers",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
       const orgId = requireOrgId(req);
-      const customers = await storage.getCustomers({ orgId });
+      const customers = await customerService.listCustomers(orgId);
       res.json(customers);
-    } catch (error) {
-      console.error("Error fetching customers:", error);
-      res.status(500).json({ error: "Failed to fetch customers" });
-    }
-  });
+    })
+  );
 
   app.post(
     "/api/customers",
     isAuthenticated,
-    hasRole("admin", "store_manager", "inventory_manager"),
-    async (req, res) => {
-      try {
-        const orgId = requireOrgId(req);
-        const customer = await storage.createCustomer(req.body, {
-          orgId,
-        });
-        res.status(201).json(customer);
-      } catch (error) {
-        console.error("Error creating customer:", error);
-        res.status(500).json({ error: "Failed to create customer" });
-      }
-    }
+    requireRole("admin", "store_manager", "inventory_manager"),
+    validateRequestBody(createCustomerRequestSchema),
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const customer = await customerService.createCustomer(req.body, orgId);
+      res.status(201).json(customer);
+    })
   );
 
   // Bills API - All authenticated users can view
-  app.get("/api/bills", isAuthenticated, async (req, res) => {
-    try {
+  app.get(
+    "/api/bills",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
       const orgId = requireOrgId(req);
-      const bills = await storage.getBills({ orgId });
+      const { billRepository } = await import("./repositories");
+      const bills = await billRepository.findAll(orgId);
       res.json(bills);
-    } catch (error) {
-      console.error("Error fetching bills:", error);
-      res.status(500).json({ error: "Failed to fetch bills" });
-    }
-  });
+    })
+  );
 
   // Scalable, paginated bills endpoint with keyset pagination
-  app.get("/api/bills/page", isAuthenticated, async (req, res) => {
-    try {
+  app.get(
+    "/api/bills/page",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
       const orgId = requireOrgId(req);
       const limit = Math.min(Number(req.query.limit) || 50, 200);
       const cursorCreatedAt = req.query.cursorCreatedAt
@@ -369,134 +274,240 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { bills } = await import("../shared/schema");
       const { and, eq, or, lt } = await import("drizzle-orm");
 
-      const base = [eq(bills.org_id, orgId)];
+      let whereCond: SQL = eq(bills.org_id, orgId) as unknown as SQL;
       if (cursorCreatedAt && cursorId) {
-        base.push(
-          or(
-            and(eq(bills.created_at, cursorCreatedAt), lt(bills.id, cursorId)),
-            lt(bills.created_at, cursorCreatedAt)
-          )
-        );
+        const createdAt = cursorCreatedAt as Date;
+        const id = cursorId as string;
+        const paginationCond: SQL = or(
+          and(eq(bills.created_at, createdAt), lt(bills.id, id)),
+          lt(bills.created_at, createdAt)
+        ) as unknown as SQL;
+        whereCond = and(
+          eq(bills.org_id, orgId),
+          paginationCond
+        ) as unknown as SQL;
       }
 
       const rows = await db
         .select()
         .from(bills)
-        .where(and(...base))
+        .where(whereCond)
         .orderBy((bills as any).created_at, (bills as any).id)
         .limit(limit);
 
-      const items = rows.reverse(); // ensure descending order for UI
+      const items = rows.reverse();
       const last = items[items.length - 1];
       const nextCursor = last
         ? { createdAt: last.created_at, id: last.id }
         : null;
 
       res.json({ items, nextCursor, limit });
-    } catch (error) {
-      console.error("Error fetching paged bills:", error);
-      res.status(500).json({ error: "Failed to fetch paged bills" });
-    }
-  });
+    })
+  );
 
-  app.get("/api/bills/today", isAuthenticated, async (req, res) => {
-    try {
+  app.get(
+    "/api/bills/today",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
       const orgId = requireOrgId(req);
-      const bills = await storage.getBillsForToday({ orgId });
-      res.json(bills);
-    } catch (error) {
-      console.error("Error fetching today's bills:", error);
-      res.status(500).json({ error: "Failed to fetch today's bills" });
-    }
-  });
+      const { db } = await import("./db");
+      const { bills } = await import("../shared/schema");
+      const { and, eq, gte, lt, desc } = await import("drizzle-orm");
+      const today = new Date();
+      const startOfDay = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate()
+      );
+      const endOfDay = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate() + 1
+      );
+
+      const rows = await db
+        .select()
+        .from(bills)
+        .where(
+          and(
+            eq(bills.org_id, orgId),
+            gte(bills.created_at, startOfDay),
+            lt(bills.created_at, endOfDay)
+          )
+        )
+        .orderBy(desc(bills.created_at));
+
+      res.json(rows);
+    })
+  );
 
   // Staff, manager, and admin can create bills
   app.post(
     "/api/bills",
     isAuthenticated,
-    hasRole("admin", "store_manager", "inventory_manager"),
-    async (req, res) => {
-      try {
-        const orgId = requireOrgId(req);
-        const bill = await storage.createBill(req.body, { orgId });
-        res.status(201).json(bill);
-      } catch (error) {
-        console.error("Error creating bill:", error);
-        res.status(500).json({ error: "Failed to create bill" });
-      }
-    }
+    requireRole("admin", "store_manager", "inventory_manager"),
+    validateRequestBody(createBillRequestSchema),
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const bill = await billingService.createBill(req.body, orgId);
+      res.status(201).json(bill);
+    })
+  );
+
+  // Finalize a bill to prevent further mutation
+  app.patch(
+    "/api/bills/:billId/finalize",
+    isAuthenticated,
+    requireRole("admin", "store_manager", "inventory_manager"),
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const finalizedBy =
+        (req as any)?.user?.username || (req as any)?.user?.id || "system";
+      const bill = await billingService.finalizeBill(
+        req.params.billId,
+        orgId,
+        String(finalizedBy)
+      );
+      res.json(bill);
+    })
   );
 
   // Bill items API
-  app.get("/api/bills/:billId/items", isAuthenticated, async (req, res) => {
-    try {
+  app.get(
+    "/api/bills/:billId/items",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
       const orgId = requireOrgId(req);
-      const items = await storage.getBillItems(req.params.billId, {
-        orgId,
-      });
+      const { billItemRepository } = await import("./repositories");
+      const items = await billItemRepository.findByBillId(
+        req.params.billId,
+        orgId
+      );
       res.json(items);
-    } catch (error) {
-      console.error("Error fetching bill items:", error);
-      res.status(500).json({ error: "Failed to fetch bill items" });
-    }
-  });
+    })
+  );
 
   app.post(
     "/api/bills/:billId/items",
     isAuthenticated,
-    hasRole("admin", "store_manager", "inventory_manager"),
-    async (req, res) => {
-      try {
-        const orgId = requireOrgId(req);
-        const item = await storage.createBillItem(
-          {
-            ...req.body,
-            bill_id: req.params.billId,
-          },
-          { orgId }
-        );
-        res.status(201).json(item);
-      } catch (error) {
-        console.error("Error creating bill item:", error);
-        res.status(500).json({ error: "Failed to create bill item" });
+    requireRole("admin", "store_manager", "inventory_manager"),
+    validateRequestBody(addBillItemRequestSchema),
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const item = await billingService.addBillItem(
+        req.params.billId,
+        req.body.product_id,
+        req.body.quantity,
+        orgId
+      );
+      res.status(201).json(item);
+    })
+  );
+
+  // Credit notes API
+  const creditNoteSchema = z.object({
+    amount: z.number().positive(),
+    reason: z.string().optional(),
+  });
+
+  app.get(
+    "/api/bills/:billId/credit-notes",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const { billRepository, creditNoteRepository } = await import(
+        "./repositories"
+      );
+      const bill = await billRepository.findById(req.params.billId, orgId);
+      if (!bill) {
+        return res.status(404).json({ error: "Bill not found" });
       }
-    }
+      const notes = await creditNoteRepository.findByBillId(
+        req.params.billId,
+        orgId
+      );
+      res.json(notes);
+    })
+  );
+
+  app.post(
+    "/api/bills/:billId/credit-notes",
+    isAuthenticated,
+    requireRole("admin", "store_manager", "inventory_manager"),
+    validateRequestBody(createCreditNoteRequestSchema),
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const note = await billingService.createCreditNote(
+        req.params.billId,
+        req.body.amount,
+        req.body.reason,
+        orgId
+      );
+      res.status(201).json(note);
+    })
   );
 
   // Inventory transactions API
-  app.get("/api/inventory-transactions", isAuthenticated, async (req, res) => {
-    try {
+  app.get(
+    "/api/inventory-transactions",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
       const orgId = requireOrgId(req);
-      const productId = req.query.product_id as string;
-      const transactions = await storage.getInventoryTransactions(
-        { orgId },
-        productId
-      );
+      const productId = req.query.product_id as string | undefined;
+      const { inventoryTransactionRepository } = await import("./repositories");
+      const transactions = productId
+        ? await inventoryTransactionRepository.findByProductId(productId, orgId)
+        : await inventoryTransactionRepository.findAll(orgId);
       res.json(transactions);
-    } catch (error) {
-      console.error("Error fetching inventory transactions:", error);
-      res.status(500).json({ error: "Failed to fetch inventory transactions" });
-    }
-  });
+    })
+  );
 
   app.post(
     "/api/inventory-transactions",
     isAuthenticated,
-    hasRole("admin", "store_manager"),
-    async (req, res) => {
-      try {
-        const orgId = requireOrgId(req);
-        const transaction = await storage.createInventoryTransaction(req.body, {
-          orgId,
-        });
-        res.status(201).json(transaction);
-      } catch (error) {
-        console.error("Error creating inventory transaction:", error);
-        res
-          .status(500)
-          .json({ error: "Failed to create inventory transaction" });
+    requireRole("admin", "store_manager"),
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const {
+        product_id,
+        transaction_type,
+        quantity,
+        reference_type,
+        reference_id,
+        notes,
+      } = req.body as any;
+      let result;
+      if (transaction_type === "in") {
+        result = await inventoryService.recordStockIn(
+          product_id,
+          Number(quantity),
+          reference_type || "adjustment",
+          reference_id || null,
+          notes || null,
+          orgId
+        );
+      } else if (transaction_type === "out") {
+        result = await inventoryService.recordStockOut(
+          product_id,
+          Number(quantity),
+          reference_type || "adjustment",
+          reference_id || null,
+          notes || null,
+          orgId
+        );
+      } else {
+        // adjustment
+        const delta = Number(quantity) || 0;
+        const adj = await inventoryService.adjustStock(
+          product_id,
+          delta,
+          notes || "adjustment",
+          orgId
+        );
+        result = adj;
       }
-    }
+      res.status(201).json(result.transaction);
+    })
   );
 
   // RBAC roles API - For invite functionality
@@ -548,9 +559,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Add user context from session
       req.ctx = {
         userId: (req.user as any)?.id,
-        orgId: (req.user as any)?.org_id,
-        roleId: (req.user as any)?.role_id,
+        orgId: (req.user as any)?.orgId,
         roles: userWithRole ? [userWithRole.roleName] : [],
+        permissions: [],
+        stores: [],
       };
       console.log("🔍 Request context:", req.ctx);
       await orgInvite(req, res);
@@ -562,35 +574,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .json({ error: "Failed to send invite", details: error.message });
     }
   }); // Dashboard stats API - All authenticated users
-  app.get("/api/dashboard/stats", isAuthenticated, async (req, res) => {
-    try {
+  app.get(
+    "/api/dashboard/stats",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
       const orgId = requireOrgId(req);
-      const products = await storage.getProducts({ orgId });
-      const todayBills = await storage.getBillsForToday({ orgId });
-      const allBills = await storage.getBills({ orgId });
-      const customers = await storage.getCustomers({ orgId });
+      const lowStock = await productService.getLowStockProducts(orgId);
+      const expiring = await productService.getExpiringProducts(orgId, 7);
+      const { billRepository } = await import("./repositories");
+      const allBills = await billRepository.findAll(orgId);
+      const customers = await customerService.listCustomers(orgId);
 
-      const lowStock = products.filter(
-        (p) => (p.quantity_in_stock || 0) <= (p.min_stock_level || 0)
+      const totalRevenue = allBills.reduce(
+        (sum, bill) => sum + Number(bill.final_amount || 0),
+        0
       );
-      const expiring = products.filter((p) => {
-        if (!p.expiry_date) return false;
-        const expiryDate = new Date(p.expiry_date);
-        const now = new Date();
-        const daysDiff = Math.ceil(
-          (expiryDate.getTime() - now.getTime()) / (1000 * 3600 * 24)
-        );
-        return daysDiff <= 7 && daysDiff >= 0;
-      });
 
       const stats = {
-        totalProducts: products.length,
+        totalProducts: (await productService.listProducts(orgId)).length,
         lowStock: lowStock.length,
-        todaySales: todayBills.length,
-        totalRevenue: allBills.reduce(
-          (sum, bill) => sum + Number(bill.final_amount),
-          0
-        ),
+        todaySales: await (async () => {
+          const { db } = await import("./db");
+          const { bills } = await import("../shared/schema");
+          const { and, eq, gte, lt } = await import("drizzle-orm");
+          const today = new Date();
+          const startOfDay = new Date(
+            today.getFullYear(),
+            today.getMonth(),
+            today.getDate()
+          );
+          const endOfDay = new Date(
+            today.getFullYear(),
+            today.getMonth(),
+            today.getDate() + 1
+          );
+          const rows = await db
+            .select()
+            .from(bills)
+            .where(
+              and(
+                eq(bills.org_id, orgId),
+                gte(bills.created_at, startOfDay),
+                lt(bills.created_at, endOfDay)
+              )
+            );
+          return rows.length;
+        })(),
+        totalRevenue,
         expiringProducts: expiring.length,
         totalCustomers: customers.length,
         lowStockProducts: lowStock,
@@ -598,11 +628,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       res.json(stats);
-    } catch (error) {
-      console.error("Error fetching dashboard stats:", error);
-      res.status(500).json({ error: "Failed to fetch dashboard stats" });
-    }
-  });
+    })
+  );
 
   // Get user's organization and store details
   app.get("/api/profile/organization", isAuthenticated, async (req, res) => {

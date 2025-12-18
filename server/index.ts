@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { setupAuth } from "./auth";
 import { setupAuthRoutes } from "./authRoutes";
+import qrRoutes from "./routes/qrRoutes";
 import dotenv from "dotenv";
 import path from "path";
 import helmet from "helmet";
@@ -14,6 +15,7 @@ import { sessions } from "../shared/schema";
 import { lt } from "drizzle-orm";
 import * as Sentry from "@sentry/node";
 import { nodeProfilingIntegration } from "@sentry/profiling-node";
+import { errorHandler } from "./middleware/errorHandler";
 
 // Load environment-specific .env file
 const envFile =
@@ -112,26 +114,16 @@ app.use((req, res, next) => {
   setupAuthRoutes(app);
   // Setup JWT-based routes (new)
   registerJwtRoutes(app);
+  // Setup QR code routes
+  app.use(qrRoutes);
 
   const server = await registerRoutes(app);
 
   // Cleanup expired sessions periodically
   scheduleSessionCleanup();
 
-  // Global error handler
-  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || 500;
-    if (process.env.SENTRY_DSN) {
-      Sentry.captureException(err, {
-        level: status >= 500 ? "error" : "warning",
-        tags: { route: req.path },
-        extra: { method: req.method, status },
-      });
-    }
-    res
-      .status(status)
-      .json({ message: err.message || "Internal Server Error" });
-  });
+  // Global error handler (structured, consistent)
+  app.use(errorHandler);
 
   // Serve static files or use Vite in dev mode
   if (app.get("env") === "development") {

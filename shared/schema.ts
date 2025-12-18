@@ -51,6 +51,7 @@ export const products = pgTable("products", {
   brand: text("brand"),
   barcode: text("barcode"),
   qr_code: text("qr_code"),
+  qr_code_image: text("qr_code_image"),
   mrp: decimal("mrp", { precision: 10, scale: 2 }).notNull(),
   buying_cost: decimal("buying_cost", { precision: 10, scale: 2 }).notNull(),
   manufacturing_date: date("manufacturing_date"),
@@ -95,6 +96,8 @@ export const bills = pgTable("bills", {
   tax_amount: decimal("tax_amount", { precision: 10, scale: 2 }).default("0"),
   final_amount: decimal("final_amount", { precision: 10, scale: 2 }).notNull(),
   payment_method: text("payment_method").default("cash"),
+  finalized_at: timestamp("finalized_at"),
+  finalized_by: text("finalized_by"),
   created_at: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -102,6 +105,9 @@ export const bill_items = pgTable("bill_items", {
   id: uuid("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
+  org_id: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
   bill_id: uuid("bill_id")
     .references(() => bills.id, { onDelete: "cascade" })
     .notNull(),
@@ -111,6 +117,21 @@ export const bill_items = pgTable("bill_items", {
   quantity: integer("quantity").notNull(),
   unit_price: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
   total_price: decimal("total_price", { precision: 10, scale: 2 }).notNull(),
+  created_at: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const credit_notes = pgTable("credit_notes", {
+  id: uuid("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  org_id: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  bill_id: uuid("bill_id")
+    .notNull()
+    .references(() => bills.id, { onDelete: "cascade" }),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  reason: text("reason"),
   created_at: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -201,23 +222,26 @@ export const insertProductSchema = createInsertSchema(products).omit({
   created_at: true,
   updated_at: true,
   org_id: true,
-  store_id: true,
 });
 export const insertCustomerSchema = createInsertSchema(customers).omit({
   id: true,
   created_at: true,
   org_id: true,
-  store_id: true,
 });
 export const insertBillSchema = createInsertSchema(bills).omit({
   id: true,
   created_at: true,
   org_id: true,
-  store_id: true,
 });
 export const insertBillItemSchema = createInsertSchema(bill_items).omit({
   id: true,
   created_at: true,
+  org_id: true,
+});
+export const insertCreditNoteSchema = createInsertSchema(credit_notes).omit({
+  id: true,
+  created_at: true,
+  org_id: true,
 });
 export const insertInventoryTransactionSchema = createInsertSchema(
   inventory_transactions
@@ -225,7 +249,6 @@ export const insertInventoryTransactionSchema = createInsertSchema(
   id: true,
   created_at: true,
   org_id: true,
-  store_id: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -242,6 +265,8 @@ export type InventoryTransaction = typeof inventory_transactions.$inferSelect;
 export type InsertInventoryTransaction = z.infer<
   typeof insertInventoryTransactionSchema
 >;
+export type CreditNote = typeof credit_notes.$inferSelect;
+export type InsertCreditNote = z.infer<typeof insertCreditNoteSchema>;
 
 // =============================
 // Multi-tenant RBAC + JWT tables
