@@ -227,28 +227,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Payments (Razorpay) Endpoints
   // ============================
   // Create subscription intent (server creates subscription/order metadata)
+  // Razorpay SDK
+  import Razorpay from "razorpay";
+  const razorpay = new Razorpay({
+    key_id: env.RAZORPAY_KEY_ID,
+    key_secret: env.RAZORPAY_KEY_SECRET,
+  });
+
   app.post(
     "/api/payments/create-subscription",
     asyncHandler(async (req, res) => {
-      // Minimal scaffold: validate plan and return payload for frontend checkout
       const bodySchema = z.object({
         plan: z.string().default(env.SUBSCRIPTION_DEFAULT_PLAN),
         metadata: z.record(z.any()).optional(),
       });
       const { plan, metadata } = bodySchema.parse(req.body || {});
 
-      // In a real integration, call Razorpay Subscriptions API here.
-      // For now, return a mock payload including the public key for checkout.
-      const subscriptionId = `sub_${Date.now()}`;
-      res.status(200).json({
-        ok: true,
-        provider: "razorpay",
-        key_id: env.RAZORPAY_KEY_ID || "",
-        plan,
-        subscription_id: subscriptionId,
-        metadata: metadata || {},
-        // Frontend should open Razorpay Checkout with this data
-      });
+      // Replace with your actual plan_id from Razorpay dashboard
+      const plan_id = plan; // Or map plan to plan_id if needed
+      try {
+        const subscription = await razorpay.subscriptions.create({
+          plan_id,
+          customer_notify: 1,
+          total_count: 12, // e.g., for 12 months
+        });
+        res.status(200).json({
+          ok: true,
+          provider: "razorpay",
+          key_id: env.RAZORPAY_KEY_ID || "",
+          plan,
+          subscription_id: subscription.id,
+          metadata: metadata || {},
+        });
+      } catch (error) {
+        console.error("Razorpay subscription error:", error);
+        res.status(500).json({ ok: false, error: error.message });
+      }
     })
   );
 

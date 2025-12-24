@@ -8,7 +8,7 @@ const SMTP_PASS = process.env.SMTP_PASS;
 
 let transporter: nodemailer.Transporter | null = null;
 
-function getTransporter() {
+export function getTransporter() {
   if (!transporter) {
     if (!SMTP_USER || !SMTP_PASS) {
       console.warn(

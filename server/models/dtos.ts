@@ -2,6 +2,17 @@ import { z } from "zod";
 
 // ============ PRODUCT DTOs ============
 
+export const batchSchema = z.object({
+  batch_id: z.string().uuid().optional(),
+  batch_number: z.string().min(1, "Batch number is required"),
+  arrival_date: z.string().datetime(),
+  expiry_date: z.string().datetime().optional(),
+  quantity: z.number().int().nonnegative(),
+  shelf_location: z.string().optional(),
+  barcode: z.string().optional(),
+  qr_code: z.string().optional(),
+});
+
 export const createProductRequestSchema = z.object({
   name: z.string().min(1, "Product name is required"),
   category: z.string().min(1, "Category is required"),
@@ -21,6 +32,7 @@ export const createProductRequestSchema = z.object({
   min_stock_level: z.number().int().nonnegative().default(5),
   unit: z.string().default("piece"),
   description: z.string().optional(),
+  batches: z.array(batchSchema).optional(),
 });
 
 export const updateProductRequestSchema = createProductRequestSchema.partial();
@@ -97,7 +109,13 @@ export type CreateCreditNoteRequest = z.infer<
 
 export const recordStockInRequestSchema = z.object({
   product_id: z.string().uuid("Product ID must be a valid UUID"),
+  batch_number: z.string().min(1, "Batch number is required"),
+  arrival_date: z.string().datetime(),
+  expiry_date: z.string().datetime().optional(),
   quantity: z.number().int().positive("Quantity must be positive"),
+  shelf_location: z.string().optional(),
+  barcode: z.string().optional(),
+  qr_code: z.string().optional(),
   reference_type: z.enum(["purchase", "adjustment", "return"]),
   reference_id: z.string().optional(),
   notes: z.string().optional(),
@@ -145,6 +163,7 @@ export const productResponseSchema = z.object({
   description: z.string().nullable(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
+  batches: z.array(batchSchema).optional(),
 });
 
 export const billResponseSchema = z.object({

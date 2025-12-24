@@ -197,6 +197,44 @@ export class BillingService {
           throw new Error(`Failed to finalize bill ${billId}`);
         }
 
+        // Send bill email with QR code if customer email exists
+        try {
+          const { sendBillEmail } = await import("./billEmailService");
+          const { customerRepository } = await import("../repositories");
+          const customer = finalizedBill.customer_id
+            ? await customerRepository.findById(
+                finalizedBill.customer_id,
+                orgId
+              )
+            : null;
+          if (customer && customer.email) {
+            // Prepare bill details and QR data
+            const billDetails =
+              `<ul>` +
+              items
+                .map((i) => `<li>${i.quantity} x ${i.product_id}</li>`)
+                .join("") +
+              `</ul>`;
+            const qrData = JSON.stringify({
+              billId: finalizedBill.id,
+              items: items.map((i) => ({
+                product_id: i.product_id,
+                quantity: i.quantity,
+              })),
+            });
+            await sendBillEmail({
+              to: customer.email,
+              customerName: customer.name || "Customer",
+              billNumber: finalizedBill.bill_number,
+              billDetails,
+              qrData,
+              orgName: "PantryPal",
+            });
+          }
+        } catch (e) {
+          console.error("Failed to send bill email:", e);
+        }
+
         return finalizedBill;
       });
 

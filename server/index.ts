@@ -61,7 +61,27 @@ const isDev = app.get("env") === "development";
 app.use(
   helmet({
     // In dev, disable CSP so Vite/react-refresh inline preambles and overlays can run
-    contentSecurityPolicy: isDev ? false : undefined,
+    contentSecurityPolicy: isDev
+      ? false
+      : {
+          directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "https://checkout.razorpay.com"],
+            scriptSrcElem: ["'self'", "https://checkout.razorpay.com"],
+            frameSrc: [
+              "'self'",
+              "https://api.razorpay.com",
+              "https://checkout.razorpay.com",
+            ],
+            connectSrc: [
+              "'self'",
+              "https://lumberjack.razorpay.com",
+              "https://api.razorpay.com",
+              "https://checkout.razorpay.com",
+            ],
+            // Add other directives as needed
+          },
+        },
     crossOriginEmbedderPolicy: isDev ? false : undefined,
   })
 );

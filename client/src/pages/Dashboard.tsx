@@ -128,10 +128,20 @@ export default function Dashboard() {
     0
   );
 
-  const expiringProducts = productStore.products.filter((p) => {
-    if (!p.expiry_date) return false;
+  // Collect all batches from products
+  const allBatches = productStore.products.flatMap((product) =>
+    (product.batches || []).map((batch) => ({
+      ...batch,
+      productName: product.name,
+      productId: product.id,
+    }))
+  );
+
+  // Batches expiring soon (within 7 days)
+  const expiringBatches = allBatches.filter((batch) => {
+    if (!batch.expiry_date) return false;
     const daysUntilExpiry = Math.ceil(
-      (new Date(p.expiry_date).getTime() - new Date().getTime()) /
+      (new Date(batch.expiry_date).getTime() - new Date().getTime()) /
         (1000 * 3600 * 24)
     );
     return daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
@@ -312,48 +322,65 @@ export default function Dashboard() {
 
       {/* Alerts and Quick Actions */}
       <div className="grid gap-4 md:grid-cols-2">
-        {/* Expiring Soon */}
+        {/* Expiring Batches & Shelf Placement */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
-              Expiring Soon
+              Expiring Batches & Shelf Placement
             </CardTitle>
-            <CardDescription>Products expiring within 7 days</CardDescription>
+            <CardDescription>
+              Batches expiring within 7 days, sorted for front shelf placement
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            {expiringProducts.length === 0 ? (
+            {expiringBatches.length === 0 ? (
               <div className="flex items-center gap-2 text-sm text-green-600">
                 <CheckCircle className="h-4 w-4" />
-                No products expiring soon
+                No batches expiring soon
               </div>
             ) : (
               <div className="space-y-2">
-                {expiringProducts.slice(0, 5).map((product) => {
-                  const daysLeft = Math.ceil(
-                    (new Date(product.expiry_date || "").getTime() -
-                      new Date().getTime()) /
-                      (1000 * 3600 * 24)
-                  );
-                  return (
-                    <div
-                      key={product.id}
-                      className="flex justify-between items-center text-sm"
-                    >
-                      <span className="text-foreground">{product.name}</span>
-                      <Badge
-                        variant={daysLeft <= 3 ? "destructive" : "secondary"}
-                        className="text-xs"
+                {expiringBatches
+                  .sort(
+                    (a, b) =>
+                      new Date(a.expiry_date).getTime() -
+                      new Date(b.expiry_date).getTime()
+                  )
+                  .slice(0, 5)
+                  .map((batch) => {
+                    const daysLeft = Math.ceil(
+                      (new Date(batch.expiry_date || "").getTime() -
+                        new Date().getTime()) /
+                        (1000 * 3600 * 24)
+                    );
+                    return (
+                      <div
+                        key={batch.batch_id || batch.batch_number}
+                        className="flex flex-col md:flex-row justify-between items-start md:items-center text-sm border-b pb-2 mb-2"
                       >
-                        {daysLeft} days
-                      </Badge>
-                    </div>
-                  );
-                })}
-                {expiringProducts.length > 5 && (
+                        <span className="font-medium text-foreground">
+                          {batch.productName}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Batch: {batch.batch_number}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Shelf: {batch.shelf_location || "N/A"}
+                        </span>
+                        <Badge
+                          variant={daysLeft <= 3 ? "destructive" : "secondary"}
+                          className="text-xs"
+                        >
+                          {daysLeft} days
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                {expiringBatches.length > 5 && (
                   <Button variant="link" size="sm" asChild className="w-full">
                     <Link to="/inventory">
-                      View all ({expiringProducts.length})
+                      View all ({expiringBatches.length})
                     </Link>
                   </Button>
                 )}

@@ -1,273 +1,319 @@
-import { useState, useEffect, useRef } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { api, type Product, type Customer } from "@/lib/api"
-import { Link, useNavigate } from "react-router-dom"
-import { ArrowLeft, Plus, Trash2, QrCode, Receipt, Camera, Play, Square } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import QrScanner from "qr-scanner"
+import { useState, useEffect, useRef } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { api, type Product, type Customer } from "@/lib/api";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  ArrowLeft,
+  Plus,
+  Trash2,
+  QrCode,
+  Receipt,
+  Camera,
+  Play,
+  Square,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import QrScanner from "qr-scanner";
 
 interface BillItem {
-  product: Product
-  quantity: number
-  unit_price: number
-  total_price: number
+  product: Product;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
 }
 
 export default function NewBill() {
-  const [products, setProducts] = useState<Product[]>([])
-  const [customers, setCustomers] = useState<Customer[]>([])
-  const [billItems, setBillItems] = useState<BillItem[]>([])
-  const [selectedCustomer, setSelectedCustomer] = useState<string>("")
-  const [paymentMethod, setPaymentMethod] = useState<string>("cash")
-  const [discountAmount, setDiscountAmount] = useState<number>(0)
-  const [taxAmount, setTaxAmount] = useState<number>(0)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isScannerOpen, setIsScannerOpen] = useState(false)
-  const [isScanning, setIsScanning] = useState(false)
-  const [scanner, setScanner] = useState<QrScanner | null>(null)
-  const [isProcessingScan, setIsProcessingScan] = useState(false)
-  const { toast } = useToast()
-  const navigate = useNavigate()
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const [products, setProducts] = useState<Product[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [billItems, setBillItems] = useState<BillItem[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<string>("");
+  const [paymentMethod, setPaymentMethod] = useState<string>("cash");
+  const [discountAmount, setDiscountAmount] = useState<number>(0);
+  const [taxAmount, setTaxAmount] = useState<number>(0);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanner, setScanner] = useState<QrScanner | null>(null);
+  const [isProcessingScan, setIsProcessingScan] = useState(false);
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    loadData()
-  }, [])
+    loadData();
+  }, []);
 
   // Cleanup scanner when dialog closes
   useEffect(() => {
     if (!isScannerOpen) {
-      stopCameraScanning()
-      setIsProcessingScan(false)
+      stopCameraScanning();
+      setIsProcessingScan(false);
     }
-  }, [isScannerOpen])
+  }, [isScannerOpen]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (scanner) {
-        scanner.stop()
-        scanner.destroy()
+        scanner.stop();
+        scanner.destroy();
       }
-    }
-  }, [scanner])
+    };
+  }, [scanner]);
 
   const loadData = async () => {
     try {
       const [productsData, customersData] = await Promise.all([
         api.getProducts(),
-        api.getCustomers()
-      ])
-      setProducts(productsData)
-      setCustomers(customersData)
+        api.getCustomers(),
+      ]);
+      setProducts(productsData);
+      setCustomers(customersData);
     } catch (error) {
-      console.error('Error loading data:', error)
+      console.error("Error loading data:", error);
       toast({
         title: "Error",
         description: "Failed to load data",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (product.brand && product.brand.toLowerCase().includes(searchTerm.toLowerCase()))
-  )
+  const filteredProducts = products.filter(
+    (product) =>
+      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (product.brand &&
+        product.brand.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
-  const addProductToBill = (product: Product, quantity: number = 1) => {
-    const existingItem = billItems.find(item => item.product.id === product.id)
-    
+  // Add product to bill, with batch selection for perishable items
+  const addProductToBill = (
+    product: Product,
+    quantity: number = 1,
+    batchId?: string
+  ) => {
+    // If perishable (has expiry), select batch
+    if (
+      product.expiry_date ||
+      (product.batches && product.batches.length > 0)
+    ) {
+      let selectedBatch = null;
+      if (batchId) {
+        selectedBatch = product.batches?.find(
+          (b: any) => b.batch_id === batchId
+        );
+      } else if (product.batches && product.batches.length === 1) {
+        selectedBatch = product.batches[0];
+      }
+      // If multiple batches, prompt user to select batch (UI implementation needed)
+      // For now, pick first batch if not specified
+      if (!selectedBatch && product.batches && product.batches.length > 0) {
+        selectedBatch = product.batches[0];
+      }
+      // Attach batch info to bill item
+      const unit_price = Number(product.mrp);
+      const total_price = unit_price * quantity;
+      setBillItems((prev) => [
+        ...prev,
+        {
+          product,
+          quantity,
+          unit_price,
+          total_price,
+          batch: selectedBatch || null,
+        },
+      ]);
+      return;
+    }
+    // Non-perishable: add as usual
+    const existingItem = billItems.find(
+      (item) => item.product.id === product.id
+    );
     if (existingItem) {
-      updateItemQuantity(product.id, existingItem.quantity + quantity)
+      updateItemQuantity(product.id, existingItem.quantity + quantity);
     } else {
-      const unit_price = Number(product.mrp)
-      const total_price = unit_price * quantity
-      setBillItems(prev => [...prev, {
-        product,
-        quantity,
-        unit_price,
-        total_price
-      }])
+      const unit_price = Number(product.mrp);
+      const total_price = unit_price * quantity;
+      setBillItems((prev) => [
+        ...prev,
+        {
+          product,
+          quantity,
+          unit_price,
+          total_price,
+        },
+      ]);
     }
-  }
+  };
 
   const updateItemQuantity = (productId: string, newQuantity: number) => {
     if (newQuantity <= 0) {
-      removeItemFromBill(productId)
-      return
+      removeItemFromBill(productId);
+      return;
     }
-    
-    setBillItems(prev => prev.map(item => {
-      if (item.product.id === productId) {
-        const total_price = item.unit_price * newQuantity
-        return { ...item, quantity: newQuantity, total_price }
-      }
-      return item
-    }))
-  }
+
+    setBillItems((prev) =>
+      prev.map((item) => {
+        if (item.product.id === productId) {
+          const total_price = item.unit_price * newQuantity;
+          return { ...item, quantity: newQuantity, total_price };
+        }
+        return item;
+      })
+    );
+  };
 
   const removeItemFromBill = (productId: string) => {
-    const existingItem = billItems.find(item => item.product.id === productId)
-    
+    const existingItem = billItems.find(
+      (item) => item.product.id === productId
+    );
+
     if (existingItem && existingItem.quantity > 1) {
       // Reduce quantity by 1
-      updateItemQuantity(productId, existingItem.quantity - 1)
+      updateItemQuantity(productId, existingItem.quantity - 1);
     } else {
       // Remove item completely if quantity is 1 or less
-      setBillItems(prev => prev.filter(item => item.product.id !== productId))
+      setBillItems((prev) =>
+        prev.filter((item) => item.product.id !== productId)
+      );
     }
-  }
+  };
 
   const calculateSubtotal = () => {
-    return billItems.reduce((sum, item) => sum + item.total_price, 0)
-  }
+    return billItems.reduce((sum, item) => sum + item.total_price, 0);
+  };
 
   const calculateTotal = () => {
-    return calculateSubtotal() + taxAmount - discountAmount
-  }
+    return calculateSubtotal() + taxAmount - discountAmount;
+  };
 
   const startCameraScanning = async () => {
-    if (!videoRef.current) return
-    
+    if (!videoRef.current) return;
+
     try {
-      setIsScanning(true)
+      setIsScanning(true);
       const qrScanner = new QrScanner(
         videoRef.current,
         (result) => {
-          handleQRCodeScan(result.data)
-          stopCameraScanning()
+          handleQRCodeScan(result.data);
+          stopCameraScanning();
         },
         {
           returnDetailedScanResult: true,
           highlightScanRegion: true,
           highlightCodeOutline: true,
         }
-      )
-      
-      await qrScanner.start()
-      setScanner(qrScanner)
-      
+      );
+
+      await qrScanner.start();
+      setScanner(qrScanner);
+
       toast({
         title: "Camera Started",
         description: "Point your camera at a QR code to add to bill",
-      })
+      });
     } catch (error) {
-      console.error('Error starting camera:', error)
+      console.error("Error starting camera:", error);
       toast({
         title: "Camera Error",
         description: "Failed to access camera. Please check permissions.",
         variant: "destructive",
-      })
-      setIsScanning(false)
+      });
+      setIsScanning(false);
     }
-  }
+  };
 
   const stopCameraScanning = () => {
     if (scanner) {
-      scanner.stop()
-      scanner.destroy()
-      setScanner(null)
+      scanner.stop();
+      scanner.destroy();
+      setScanner(null);
     }
-    setIsScanning(false)
-  }
+    setIsScanning(false);
+  };
 
+  // Handle QR/barcode scan, select batch for perishable items
   const handleQRCodeScan = async (qrData: string) => {
-    // Prevent duplicate scans
-    if (isProcessingScan) {
-      console.log("Already processing a scan, ignoring duplicate")
-      return
-    }
-    
-    setIsProcessingScan(true)
-    console.log("Scanning QR Code:", qrData)
-    console.log("Available products:", products.length)
-    
+    if (isProcessingScan) return;
+    setIsProcessingScan(true);
     try {
-      // Try to parse as JSON first (for our generated QR codes)
-      const parsed = JSON.parse(qrData)
-      console.log("Parsed QR data:", parsed)
-      
-      if (parsed.type === "pantry_pal_product" && parsed.id) {
-        // Find the product by barcode (since QR generated ID is stored in barcode field)
-        const product = products.find(p => p.barcode === parsed.id || p.id === parsed.id)
-        console.log("Found product by QR ID:", product)
-        
-        if (product) {
-          addProductToBill(product, 1)
-          toast({
-            title: "Product Added!",
-            description: `${product.name} added to bill`,
-          })
-          setIsScannerOpen(false)
-        } else {
-          // Try to find by name as fallback
-          const productByName = products.find(p => p.name === parsed.name)
-          if (productByName) {
-            addProductToBill(productByName, 1)
-            toast({
-              title: "Product Added!",
-              description: `${productByName.name} added to bill`,
-            })
-            setIsScannerOpen(false)
-          } else {
-            toast({
-              title: "Product Not Found",
-              description: `QR Code ID: ${parsed.id} - No matching product found in inventory`,
-              variant: "destructive",
-            })
-          }
-        }
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(qrData);
+      } catch {}
+      let product: Product | undefined;
+      let batchId: string | undefined;
+      if (parsed && parsed.type === "pantry_pal_product" && parsed.id) {
+        product = products.find(
+          (p) => p.barcode === parsed.id || p.id === parsed.id
+        );
+        batchId = parsed.batch_id;
       } else {
-        // Try to find by barcode or product ID
-        const product = products.find(p => p.barcode === qrData || p.id === qrData)
-        if (product) {
-          addProductToBill(product, 1)
-          toast({
-            title: "Product Added!",
-            description: `${product.name} added to bill`,
-          })
-          setIsScannerOpen(false)
-        } else {
-          toast({
-            title: "Product Not Found",
-            description: "No product matches this QR code",
-            variant: "destructive",
-          })
-        }
+        product = products.find((p) => p.barcode === qrData || p.id === qrData);
       }
-    } catch (error) {
-      console.log("QR Code is not JSON, trying direct match")
-      // Not a valid JSON, try to find by simple ID
-      const product = products.find(p => p.barcode === qrData || p.id === qrData)
       if (product) {
-        addProductToBill(product, 1)
+        // If perishable, select batch
+        if (
+          product.expiry_date ||
+          (product.batches && product.batches.length > 0)
+        ) {
+          // If batchId present, use it; else pick first batch
+          addProductToBill(product, 1, batchId);
+        } else {
+          addProductToBill(product, 1);
+        }
         toast({
           title: "Product Added!",
           description: `${product.name} added to bill`,
-        })
-        setIsScannerOpen(false)
+        });
+        setIsScannerOpen(false);
       } else {
         toast({
-          title: "Invalid QR Code",
-          description: `Raw data: ${qrData} - This QR code is not recognized`,
+          title: "Product Not Found",
+          description: `No product matches this QR/Barcode`,
           variant: "destructive",
-        })
+        });
       }
     } finally {
-      setIsProcessingScan(false)
+      setIsProcessingScan(false);
     }
-  }
+  };
 
   const handleSubmit = async () => {
     if (billItems.length === 0) {
@@ -275,11 +321,11 @@ export default function NewBill() {
         title: "Error",
         description: "Please add items to the bill",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
-    setIsSubmitting(true)
+    setIsSubmitting(true);
     try {
       const billData = {
         bill_number: `BILL-${Date.now()}`,
@@ -289,10 +335,10 @@ export default function NewBill() {
         tax_amount: taxAmount.toString(),
         final_amount: calculateTotal().toString(),
         payment_method: paymentMethod,
-      }
+      };
 
-      const bill = await api.createBill(billData)
-      
+      const bill = await api.createBill(billData);
+
       // Add bill items
       for (const item of billItems) {
         await api.post(`/bills/${bill.id}/items`, {
@@ -300,34 +346,34 @@ export default function NewBill() {
           quantity: item.quantity,
           unit_price: item.unit_price.toString(),
           total_price: item.total_price.toString(),
-        })
+        });
       }
 
       toast({
         title: "Success",
         description: `Bill ${bill.bill_number} created successfully!`,
-      })
-      navigate("/billing")
+      });
+      navigate("/billing");
     } catch (error) {
-      console.error("Error creating bill:", error)
+      console.error("Error creating bill:", error);
       toast({
         title: "Error",
         description: "Failed to create bill",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   useEffect(() => {
     return () => {
       if (scanner) {
-        scanner.stop()
-        scanner.destroy()
+        scanner.stop();
+        scanner.destroy();
       }
-    }
-  }, [scanner])
+    };
+  }, [scanner]);
 
   return (
     <div className="space-y-6">
@@ -338,7 +384,9 @@ export default function NewBill() {
           </Link>
         </Button>
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Create New Bill</h1>
+          <h1 className="text-3xl font-bold text-foreground">
+            Create New Bill
+          </h1>
           <p className="text-muted-foreground">Add items and generate bill</p>
         </div>
       </div>
@@ -349,7 +397,9 @@ export default function NewBill() {
           <Card>
             <CardHeader>
               <CardTitle>Add Products</CardTitle>
-              <CardDescription>Search and add products to the bill</CardDescription>
+              <CardDescription>
+                Search and add products to the bill
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex gap-2">
@@ -382,13 +432,18 @@ export default function NewBill() {
                           <video
                             ref={videoRef}
                             className="w-full h-64 bg-black rounded-lg"
-                            style={{ display: isScanning ? 'block' : 'none' }}
+                            style={{ display: isScanning ? "block" : "none" }}
                           />
                           {!isScanning && (
                             <div className="border-2 border-dashed rounded-lg p-8 text-center bg-muted/50 h-64 flex flex-col justify-center">
                               <Camera className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                              <p className="text-muted-foreground mb-4">Ready to scan QR codes</p>
-                              <Button onClick={startCameraScanning} className="mx-auto">
+                              <p className="text-muted-foreground mb-4">
+                                Ready to scan QR codes
+                              </p>
+                              <Button
+                                onClick={startCameraScanning}
+                                className="mx-auto"
+                              >
                                 <Play className="h-4 w-4 mr-2" />
                                 Start Camera
                               </Button>
@@ -396,7 +451,7 @@ export default function NewBill() {
                           )}
                           {isScanning && (
                             <div className="absolute top-2 right-2 z-10">
-                              <Button 
+                              <Button
                                 onClick={stopCameraScanning}
                                 variant="destructive"
                                 size="sm"
@@ -412,15 +467,19 @@ export default function NewBill() {
                   </Dialog>
                 </div>
               </div>
-              
+
               <div className="max-h-96 overflow-y-auto space-y-2">
-                {filteredProducts.map(product => (
-                  <div key={product.id} className="flex items-center justify-between p-3 border rounded-lg">
+                {filteredProducts.map((product) => (
+                  <div
+                    key={product.id}
+                    className="flex items-center justify-between p-3 border rounded-lg"
+                  >
                     <div className="flex-1">
                       <div className="font-medium">{product.name}</div>
                       <div className="text-sm text-muted-foreground">
                         {product.brand && `${product.brand} • `}
-                        {product.category} • ₹{Number(product.mrp).toLocaleString()}
+                        {product.category} • ₹
+                        {Number(product.mrp).toLocaleString()}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         Stock: {product.quantity_in_stock || 0} {product.unit}
@@ -458,7 +517,7 @@ export default function NewBill() {
                       <SelectValue placeholder="Select customer" />
                     </SelectTrigger>
                     <SelectContent>
-                      {customers.map(customer => (
+                      {customers.map((customer) => (
                         <SelectItem key={customer.id} value={customer.id}>
                           {customer.name}
                         </SelectItem>
@@ -501,28 +560,43 @@ export default function NewBill() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {billItems.map(item => (
+                        {billItems.map((item) => (
                           <TableRow key={item.product.id}>
                             <TableCell>
-                              <div className="font-medium">{item.product.name}</div>
-                              <div className="text-xs text-muted-foreground">{item.product.unit}</div>
+                              <div className="font-medium">
+                                {item.product.name}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {item.product.unit}
+                              </div>
                             </TableCell>
                             <TableCell>
                               <Input
                                 type="number"
                                 min="1"
                                 value={item.quantity}
-                                onChange={(e) => updateItemQuantity(item.product.id, parseInt(e.target.value) || 0)}
+                                onChange={(e) =>
+                                  updateItemQuantity(
+                                    item.product.id,
+                                    parseInt(e.target.value) || 0
+                                  )
+                                }
                                 className="w-20"
                               />
                             </TableCell>
-                            <TableCell>₹{item.unit_price.toLocaleString()}</TableCell>
-                            <TableCell>₹{item.total_price.toLocaleString()}</TableCell>
+                            <TableCell>
+                              ₹{item.unit_price.toLocaleString()}
+                            </TableCell>
+                            <TableCell>
+                              ₹{item.total_price.toLocaleString()}
+                            </TableCell>
                             <TableCell>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => removeItemFromBill(item.product.id)}
+                                onClick={() =>
+                                  removeItemFromBill(item.product.id)
+                                }
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -547,7 +621,9 @@ export default function NewBill() {
                         type="number"
                         min="0"
                         value={discountAmount}
-                        onChange={(e) => setDiscountAmount(Number(e.target.value) || 0)}
+                        onChange={(e) =>
+                          setDiscountAmount(Number(e.target.value) || 0)
+                        }
                       />
                     </div>
                     <div className="space-y-2">
@@ -557,11 +633,13 @@ export default function NewBill() {
                         type="number"
                         min="0"
                         value={taxAmount}
-                        onChange={(e) => setTaxAmount(Number(e.target.value) || 0)}
+                        onChange={(e) =>
+                          setTaxAmount(Number(e.target.value) || 0)
+                        }
                       />
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2 p-4 bg-muted rounded-lg">
                     <div className="flex justify-between">
                       <span>Subtotal:</span>
@@ -587,7 +665,11 @@ export default function NewBill() {
                   </div>
 
                   <div className="flex gap-4">
-                    <Button onClick={handleSubmit} disabled={isSubmitting} className="flex-1">
+                    <Button
+                      onClick={handleSubmit}
+                      disabled={isSubmitting}
+                      className="flex-1"
+                    >
                       {isSubmitting ? "Creating..." : "Generate Bill"}
                     </Button>
                     <Button variant="outline" asChild>
@@ -601,5 +683,5 @@ export default function NewBill() {
         </div>
       </div>
     </div>
-  )
+  );
 }
