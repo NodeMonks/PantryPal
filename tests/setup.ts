@@ -77,6 +77,22 @@ async function ensureOrganizationsColumns(pool: Pool) {
   );
 }
 
+async function ensureProductsColumns(pool: Pool) {
+  // Some CI DBs can lag behind the latest schema. Drizzle selects all columns
+  // defined in `shared/schema.ts`, so missing columns break tests.
+  await pool.query(
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS qr_code_image text;`
+  );
+
+  // These are commonly added alongside qr_code_image in newer schemas.
+  await pool.query(
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true;`
+  );
+  await pool.query(
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS description text;`
+  );
+}
+
 beforeAll(async () => {
   console.log(`🧪 Test DB Connection: ${connectionString.substring(0, 20)}...`);
 
@@ -85,6 +101,7 @@ beforeAll(async () => {
   });
 
   await ensureOrganizationsColumns(testDb);
+  await ensureProductsColumns(testDb);
 });
 
 afterAll(async () => {
