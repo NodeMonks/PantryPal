@@ -114,6 +114,38 @@ async function ensureBillsColumns(pool: Pool) {
   );
 }
 
+async function ensureCreditNotesTable(pool: Pool) {
+  // Some CI databases may be missing the credit_notes table entirely.
+  // Create the minimal shape expected by `shared/schema.ts`.
+  await pool.query(
+    `CREATE TABLE IF NOT EXISTS credit_notes (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      org_id uuid NOT NULL,
+      bill_id uuid NOT NULL,
+      amount numeric(10, 2) NOT NULL,
+      reason text,
+      created_at timestamp NOT NULL DEFAULT now()
+    );`
+  );
+
+  // If the table exists but is missing newer columns (or was created without them), patch it.
+  await pool.query(
+    `ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS org_id uuid;`
+  );
+  await pool.query(
+    `ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS bill_id uuid;`
+  );
+  await pool.query(
+    `ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS amount numeric(10, 2);`
+  );
+  await pool.query(
+    `ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS reason text;`
+  );
+  await pool.query(
+    `ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS created_at timestamp;`
+  );
+}
+
 beforeAll(async () => {
   console.log(`🧪 Test DB Connection: ${connectionString.substring(0, 20)}...`);
 
@@ -124,6 +156,7 @@ beforeAll(async () => {
   await ensureOrganizationsColumns(testDb);
   await ensureProductsColumns(testDb);
   await ensureBillsColumns(testDb);
+  await ensureCreditNotesTable(testDb);
 });
 
 afterAll(async () => {
