@@ -33,10 +33,16 @@ dotenv.config();
 
 // --- Razorpay SDK import and initialization ---
 import Razorpay from "razorpay";
-const razorpay = new Razorpay({
-  key_id: env.RAZORPAY_KEY_ID,
-  key_secret: env.RAZORPAY_KEY_SECRET,
-});
+let razorpay: Razorpay | null = null;
+
+// In CI/test environments, Razorpay keys are often intentionally unset.
+// Avoid throwing at import time; endpoints can respond with a 400 when unconfigured.
+if (env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET) {
+  razorpay = new Razorpay({
+    key_id: env.RAZORPAY_KEY_ID,
+    key_secret: env.RAZORPAY_KEY_SECRET,
+  });
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Register product image proxy route
@@ -243,6 +249,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post(
     "/api/payments/create-subscription",
     asyncHandler(async (req, res) => {
+      if (!razorpay) {
+        return res.status(400).json({
+          ok: false,
+          error: "Razorpay is not configured",
+        });
+      }
+
       const bodySchema = z.object({
         plan: z.string().default(env.SUBSCRIPTION_DEFAULT_PLAN),
         metadata: z.record(z.any()).optional(),

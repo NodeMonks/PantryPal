@@ -6,6 +6,7 @@ import {
   user_roles,
   roles,
   products,
+  inventory_transactions,
   customers,
   bills,
   bill_items,
@@ -104,6 +105,9 @@ afterAll(async () => {
     await db.delete(customers).where(eq(customers.id, testCustomerId));
   }
   if (testProductId) {
+    await db
+      .delete(inventory_transactions)
+      .where(eq(inventory_transactions.product_id, testProductId));
     await db.delete(products).where(eq(products.id, testProductId));
   }
   if (testUserId) {
