@@ -21,7 +21,16 @@ import { useBillStore } from "@/stores/billStore";
 import { useAuth } from "@/contexts/AuthContext";
 import { api, type Bill, type BillItem } from "@/lib/api";
 import { Link } from "react-router-dom";
-import { Plus, Search, Receipt, IndianRupee, Eye, Download, Printer, FileText } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Receipt,
+  IndianRupee,
+  Eye,
+  Download,
+  Printer,
+  FileText,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -94,10 +103,10 @@ export default function Billing() {
         price: Number(i.unit_price),
         total: Number(i.total_price),
       })),
-      subtotal: Number(selectedBill.base_amount),
+      subtotal: Number(selectedBill.total_amount),
       tax: Number(selectedBill.tax_amount),
       total: Number(selectedBill.final_amount),
-      organizationName: user?.org_name || "PantryPal",
+      organizationName: "PantryPal",
     });
 
     toast({
@@ -111,7 +120,7 @@ export default function Billing() {
 
     try {
       await ThermalPrinter.printReceipt({
-        organizationName: user?.org_name || "PantryPal",
+        organizationName: "PantryPal",
         billNumber: selectedBill.bill_number,
         date: new Date(selectedBill.created_at),
         items: items.map((i) => ({
@@ -242,12 +251,12 @@ export default function Billing() {
               ₹
               {billStore.bills.length > 0
                 ? Math.round(
-                  billStore.bills.reduce(
-                    (sum: number, bill: Bill) =>
-                      sum + Number(bill.final_amount),
-                    0
-                  ) / billStore.bills.length
-                )
+                    billStore.bills.reduce(
+                      (sum: number, bill: Bill) =>
+                        sum + Number(bill.final_amount),
+                      0
+                    ) / billStore.bills.length
+                  )
                 : 0}
             </div>
           </CardContent>

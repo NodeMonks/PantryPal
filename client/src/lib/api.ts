@@ -14,6 +14,15 @@ export interface Product {
   expiry_date: string | null;
   qr_code: string | null;
   qr_code_image?: string | null;
+  batches?: Array<{
+    batch_id?: string;
+    batch_number?: string;
+    shelf_location?: string | null;
+    expiry_date?: string | null;
+    manufacturing_date?: string | null;
+    quantity?: number | null;
+    [key: string]: unknown;
+  }> | null;
   created_at: string;
   description?: string | null;
   manufacturing_date?: string | null;

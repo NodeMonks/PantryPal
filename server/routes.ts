@@ -26,6 +26,7 @@ import type { SQL } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "crypto";
 import { env } from "./config/env";
+import { getPlanLimits } from "./utils/planLimits";
 
 // Import product image router
 
@@ -46,6 +47,85 @@ if (env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET) {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Register product image proxy route
+
+  // Public: Subscription plans (authoritative plan details for UI)
+  app.get(
+    "/api/plans",
+    asyncHandler(async (_req, res) => {
+      const starterLimits = getPlanLimits("starter-monthly");
+      const premiumLimits = getPlanLimits("premium-monthly");
+
+      const toDisplay = (value: number) =>
+        Number.isFinite(value) ? value : "Unlimited";
+
+      const plans = [
+        {
+          id: "starter-monthly",
+          name: "Starter",
+          price: 399,
+          currency: "INR",
+          interval: "month",
+          tagline: "Built for MSMEs starting out",
+          highlights: [
+            "Up to 1 store",
+            "Inventory + billing",
+            "Role-based access",
+          ],
+          limits: {
+            stores: toDisplay(starterLimits.maxStores),
+            roles: {
+              admin_or_owner: toDisplay(
+                starterLimits.maxRoleUsers.adminOrOwner
+              ),
+              store_manager: toDisplay(
+                starterLimits.maxRoleUsers.store_manager
+              ),
+              inventory_manager: toDisplay(
+                starterLimits.maxRoleUsers.inventory_manager
+              ),
+            },
+          },
+          includes: [
+            "GST-ready billing & invoices",
+            "Inventory, barcode/QR workflow",
+            "Email invites for staff",
+            "Audit-friendly activity history",
+          ],
+        },
+        {
+          id: "premium-monthly",
+          name: "Premium",
+          price: 999,
+          currency: "INR",
+          interval: "month",
+          tagline: "Scale without limits",
+          highlights: ["Unlimited stores", "All features", "Unlimited users"],
+          limits: {
+            stores: toDisplay(premiumLimits.maxStores),
+            roles: {
+              admin_or_owner: toDisplay(
+                premiumLimits.maxRoleUsers.adminOrOwner
+              ),
+              store_manager: toDisplay(
+                premiumLimits.maxRoleUsers.store_manager
+              ),
+              inventory_manager: toDisplay(
+                premiumLimits.maxRoleUsers.inventory_manager
+              ),
+            },
+          },
+          includes: [
+            "Everything in Starter",
+            "Unlimited stores & users",
+            "Best for multi-branch MSMEs",
+          ],
+          badge: "Most Popular",
+        },
+      ];
+
+      res.status(200).json({ ok: true, plans });
+    })
+  );
 
   // Barcode/QR Code Search API - Fast product lookup by code
   app.get(

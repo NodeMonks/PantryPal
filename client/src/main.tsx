@@ -22,9 +22,8 @@ import Lenis from "lenis";
 
 const lenis = new Lenis({
   duration: 1.2,
-  smooth: true,
-  direction: "vertical",
-  gestureDirection: "vertical",
+  orientation: "vertical",
+  gestureOrientation: "vertical",
   smoothTouch: false,
 });
 

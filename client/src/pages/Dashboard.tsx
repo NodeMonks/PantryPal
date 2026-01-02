@@ -130,11 +130,13 @@ export default function Dashboard() {
 
   // Collect all batches from products
   const allBatches = productStore.products.flatMap((product) =>
-    (product.batches || []).map((batch) => ({
-      ...batch,
-      productName: product.name,
-      productId: product.id,
-    }))
+    (product.batches || []).map(
+      (batch: NonNullable<typeof product.batches>[number]) => ({
+        ...batch,
+        productName: product.name,
+        productId: product.id,
+      })
+    )
   );
 
   // Batches expiring soon (within 7 days)
@@ -342,11 +344,15 @@ export default function Dashboard() {
             ) : (
               <div className="space-y-2">
                 {expiringBatches
-                  .sort(
-                    (a, b) =>
-                      new Date(a.expiry_date).getTime() -
-                      new Date(b.expiry_date).getTime()
-                  )
+                  .sort((a, b) => {
+                    const aTime = a.expiry_date
+                      ? new Date(a.expiry_date).getTime()
+                      : Number.POSITIVE_INFINITY;
+                    const bTime = b.expiry_date
+                      ? new Date(b.expiry_date).getTime()
+                      : Number.POSITIVE_INFINITY;
+                    return aTime - bTime;
+                  })
                   .slice(0, 5)
                   .map((batch) => {
                     const daysLeft = Math.ceil(
@@ -356,7 +362,11 @@ export default function Dashboard() {
                     );
                     return (
                       <div
-                        key={batch.batch_id || batch.batch_number}
+                        key={
+                          batch.batch_id ||
+                          batch.batch_number ||
+                          `${batch.productId}-${batch.expiry_date || "na"}`
+                        }
                         className="flex flex-col md:flex-row justify-between items-start md:items-center text-sm border-b pb-2 mb-2"
                       >
                         <span className="font-medium text-foreground">

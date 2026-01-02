@@ -2,7 +2,7 @@ import { StateCreator, create } from "zustand";
 import { persist } from "zustand/middleware";
 import { OrganizationRegistrationInput } from "@shared/schema";
 
-export type RegistrationStep = 1 | 2 | 3;
+export type RegistrationStep = 1 | 2 | 3 | 4;
 
 interface RegistrationState {
   step: RegistrationStep;

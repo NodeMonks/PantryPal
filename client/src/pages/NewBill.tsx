@@ -54,6 +54,7 @@ interface BillItem {
   quantity: number;
   unit_price: number;
   total_price: number;
+  batch?: NonNullable<Product["batches"]>[number] | null;
 }
 
 export default function NewBill() {
@@ -135,9 +136,7 @@ export default function NewBill() {
     ) {
       let selectedBatch = null;
       if (batchId) {
-        selectedBatch = product.batches?.find(
-          (b: any) => b.batch_id === batchId
-        );
+        selectedBatch = product.batches?.find((b) => b.batch_id === batchId);
       } else if (product.batches && product.batches.length === 1) {
         selectedBatch = product.batches[0];
       }

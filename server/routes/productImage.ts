@@ -13,7 +13,7 @@ router.get("/product-image", async (req, res) => {
       const url = `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`;
       const response = await fetch(url);
       if (response.ok) {
-        const data = await response.json();
+        const data: any = await response.json();
         if (data.product && data.product.image_front_url) {
           return res.json({ imageUrl: data.product.image_front_url });
         }
@@ -28,7 +28,7 @@ router.get("/product-image", async (req, res) => {
       )}&search_simple=1&action=process&json=1&page_size=1`;
       const response = await fetch(searchUrl);
       if (response.ok) {
-        const data = await response.json();
+        const data: any = await response.json();
         if (
           data.products &&
           data.products[0] &&

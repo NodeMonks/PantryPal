@@ -156,7 +156,9 @@ export default function Inventory() {
       await response.json();
 
       // Refresh product list to show new QR code
-      await productStore.fetchProducts();
+      if (user?.org_id) {
+        await productStore.loadProducts(user.org_id);
+      }
 
       const product = productStore.products.find(
         (p: Product) => p.id === productId
