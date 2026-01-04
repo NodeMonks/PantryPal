@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -52,7 +52,6 @@ export default function Inventory() {
   const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("name");
@@ -63,31 +62,56 @@ export default function Inventory() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const { toast } = useToast();
 
-  // Load products directly from API
-  const loadProducts = async () => {
+  // Load products directly from API with abort controller
+  const loadProducts = useCallback(async (retryCount = 0) => {
+    const abortController = new AbortController();
     try {
       setLoading(true);
       const productsData = await api.getProducts();
-      setProducts(productsData);
+      if (!abortController.signal.aborted) {
+        setProducts(productsData);
+      }
     } catch (error) {
-      console.error("Error loading products:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load products",
-        variant: "destructive",
-      });
+      if (!abortController.signal.aborted) {
+        console.error("Error loading products:", error);
+        
+        // Retry logic for production resilience
+        if (retryCount < 2) {
+          console.log(`Retrying... attempt ${retryCount + 1}`);
+          setTimeout(() => loadProducts(retryCount + 1), 1000 * (retryCount + 1));
+          return;
+        }
+        
+        toast({
+          title: "Error",
+          description: "Failed to load products. Please refresh the page.",
+          variant: "destructive",
+        });
+      }
     } finally {
-      setLoading(false);
+      if (!abortController.signal.aborted) {
+        setLoading(false);
+      }
     }
-  };
+    return () => abortController.abort();
+  }, [toast]);
 
-  // Load products on mount
+  // Load products on mount with cleanup
   useEffect(() => {
-    loadProducts();
-  }, []);
+    let cancelled = false;
+    const load = async () => {
+      if (!cancelled) {
+        await loadProducts();
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadProducts]);
 
-  // Filter and sort products
-  useEffect(() => {
+  // Memoize filtered and sorted products for performance
+  const filteredProducts = useMemo(() => {
     let filtered = products.filter(
       (product: Product) =>
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -124,7 +148,7 @@ export default function Inventory() {
       return 0;
     });
 
-    setFilteredProducts(filtered);
+    return filtered;
   }, [products, searchTerm, categoryFilter, sortBy, sortOrder]);
 
   const getStockStatus = (product: Product) => {
@@ -208,31 +232,39 @@ export default function Inventory() {
     setDeleteDialogOpen(true);
   };
 
-  const handleDeleteConfirm = async () => {
+  const handleDeleteConfirm = useCallback(async () => {
     if (!productToDelete) return;
 
     try {
-      await api.deleteProduct(productToDelete.id);
-      await loadProducts();
+      // Optimistic update: remove from UI immediately
+      const productId = productToDelete.id;
+      setProducts(prev => prev.filter(p => p.id !== productId));
+      setDeleteDialogOpen(false);
+      setProductToDelete(null);
+      
+      // Delete on server
+      await api.deleteProduct(productId);
+      
       toast({
         title: "Success",
         description: "Product deleted successfully",
       });
-      setDeleteDialogOpen(false);
-      setProductToDelete(null);
     } catch (error) {
       console.error("Error deleting product:", error);
       toast({
         title: "Error",
-        description: "Failed to delete product",
+        description: "Failed to delete product. Refreshing...",
         variant: "destructive",
       });
+      // Reload on error to sync state
+      await loadProducts();
     }
-  };
+  }, [productToDelete, loadProducts, toast]);
 
-  const categories = Array.from(
-    new Set(products.map((p: Product) => p.category))
-  ).sort();
+  const categories = useMemo(
+    () => Array.from(new Set(products.map((p: Product) => p.category))).sort(),
+    [products]
+  );
 
   return (
     <div className="space-y-6">
