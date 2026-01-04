@@ -113,7 +113,7 @@ class ApiClient {
 
   async post<T>(endpoint: string, data: any): Promise<T> {
     console.log(`📤 POST ${endpoint}:`, data);
-    
+
     const response = await fetch(`${API_BASE}${endpoint}`, {
       method: "POST",
       headers: {
@@ -122,7 +122,7 @@ class ApiClient {
       credentials: "include", // Include cookies for authentication
       body: JSON.stringify(data),
     });
-    
+
     if (!response.ok) {
       if (response.status === 401) {
         window.location.href = "/login";
@@ -132,7 +132,7 @@ class ApiClient {
       console.error(`❌ POST ${endpoint} failed:`, statusMsg, msg);
       throw new Error(`API Error: ${msg}`);
     }
-    
+
     const result = await response.json();
     console.log(`✅ POST ${endpoint} success:`, result);
     return result;

@@ -229,10 +229,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (req.body.manufacturing_date === "")
           req.body.manufacturing_date = undefined;
         if (req.body.expiry_date === "") req.body.expiry_date = undefined;
-        
+
         // Ensure numeric fields are numbers, not strings
         if (typeof req.body.quantity_in_stock === "string") {
-          req.body.quantity_in_stock = parseInt(req.body.quantity_in_stock) || 0;
+          req.body.quantity_in_stock =
+            parseInt(req.body.quantity_in_stock) || 0;
         }
         if (typeof req.body.min_stock_level === "string") {
           req.body.min_stock_level = parseInt(req.body.min_stock_level) || 5;

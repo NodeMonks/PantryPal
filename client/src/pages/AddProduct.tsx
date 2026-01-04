@@ -23,6 +23,8 @@ import { api } from "@/lib/api";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Package, QrCode } from "lucide-react";
 import QRCode from "react-qr-code";
+import { useProductStore } from "@/stores/productStore";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function AddProduct() {
   const [formData, setFormData] = useState({
@@ -44,6 +46,8 @@ export default function AddProduct() {
 
   const { toast } = useToast();
   const navigate = useNavigate();
+  const productStore = useProductStore();
+  const { user } = useAuth();
 
   const categories = [
     "Rice & Grains",
@@ -154,15 +158,22 @@ export default function AddProduct() {
         unit: formData.unit || "piece",
         description: formData.description?.trim() || undefined,
       };
-      
+
       console.log("📤 Sending product data:", productData);
-      
+
       await api.createProduct(productData);
 
       toast({
         title: "Success",
         description: "Product added successfully!",
       });
+
+      // Refresh product store to show new product
+      if (user?.org_id) {
+        console.log("🔄 Refreshing product store...");
+        await productStore.loadProducts(user.org_id);
+      }
+
       navigate("/inventory");
     } catch (error) {
       console.error("❌ Error adding product:", error);

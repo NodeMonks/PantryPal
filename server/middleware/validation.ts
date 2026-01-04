@@ -17,7 +17,7 @@ export const validateRequestBody = (schema: ZodSchema) => {
         errors: err.errors,
         firstError: err.errors?.[0],
       });
-      
+
       const errorResponse: ErrorResponse = {
         error: "Validation error",
         details: err.errors?.[0]?.message || err.message,
