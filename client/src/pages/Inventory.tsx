@@ -60,41 +60,49 @@ export default function Inventory() {
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const { toast } = useToast();
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+  const [batchGenerating, setBatchGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0 });
 
   // Load products directly from API with abort controller
-  const loadProducts = useCallback(async (retryCount = 0) => {
-    const abortController = new AbortController();
-    try {
-      setLoading(true);
-      const productsData = await api.getProducts();
-      if (!abortController.signal.aborted) {
-        setProducts(productsData);
-      }
-    } catch (error) {
-      if (!abortController.signal.aborted) {
-        console.error("Error loading products:", error);
-        
-        // Retry logic for production resilience
-        if (retryCount < 2) {
-          console.log(`Retrying... attempt ${retryCount + 1}`);
-          setTimeout(() => loadProducts(retryCount + 1), 1000 * (retryCount + 1));
-          return;
+  const loadProducts = useCallback(
+    async (retryCount = 0) => {
+      const abortController = new AbortController();
+      try {
+        setLoading(true);
+        const productsData = await api.getProducts();
+        if (!abortController.signal.aborted) {
+          setProducts(productsData);
         }
-        
-        toast({
-          title: "Error",
-          description: "Failed to load products. Please refresh the page.",
-          variant: "destructive",
-        });
+      } catch (error) {
+        if (!abortController.signal.aborted) {
+          console.error("Error loading products:", error);
+
+          // Retry logic for production resilience
+          if (retryCount < 2) {
+            console.log(`Retrying... attempt ${retryCount + 1}`);
+            setTimeout(
+              () => loadProducts(retryCount + 1),
+              1000 * (retryCount + 1)
+            );
+            return;
+          }
+
+          toast({
+            title: "Error",
+            description: "Failed to load products. Please refresh the page.",
+            variant: "destructive",
+          });
+        }
+      } finally {
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
       }
-    } finally {
-      if (!abortController.signal.aborted) {
-        setLoading(false);
-      }
-    }
-    return () => abortController.abort();
-  }, [toast]);
+      return () => abortController.abort();
+    },
+    [toast]
+  );
 
   // Load products on mount with cleanup
   useEffect(() => {
@@ -182,50 +190,234 @@ export default function Inventory() {
     return null;
   };
 
-  const generateQRCode = async (productId: string) => {
-    try {
-      const response = await fetch(`/api/products/${productId}/generate-qr`, {
-        method: "POST",
-        credentials: "include",
-      });
+  // Production-ready QR code generation with retry logic
+  const generateQRCode = useCallback(
+    async (productId: string, retryCount = 0) => {
+      try {
+        setGeneratingId(productId);
+        const response = await fetch(`/api/products/${productId}/generate-qr`, {
+          method: "POST",
+          credentials: "include",
+        });
 
-      if (!response.ok) {
-        throw new Error("Failed to generate QR code");
+        if (!response.ok) {
+          if (response.status === 429 && retryCount < 3) {
+            // Rate limited, retry with exponential backoff
+            await new Promise((resolve) =>
+              setTimeout(resolve, 1000 * Math.pow(2, retryCount))
+            );
+            return generateQRCode(productId, retryCount + 1);
+          }
+          throw new Error(
+            `Failed to generate QR code: ${response.statusText}`
+          );
+        }
+
+        const data = await response.json();
+
+        // Update local product data optimistically
+        setProducts((prev) =>
+          prev.map((p) =>
+            p.id === productId
+              ? { ...p, qr_code: data.qr_code, qr_code_image: data.qr_code_image }
+              : p
+          )
+        );
+
+        // Update selected product if viewing
+        if (selectedProduct?.id === productId) {
+          setSelectedProduct((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  qr_code: data.qr_code,
+                  qr_code_image: data.qr_code_image,
+                }
+              : null
+          );
+          setQrDialogOpen(true);
+        }
+
+        toast({
+          title: "QR Code Generated",
+          description: `QR code generated for ${data.product?.name || "product"}`,
+        });
+      } catch (error) {
+        console.error(`Error generating QR code for ${productId}:`, error);
+        toast({
+          title: "Error",
+          description:
+            error instanceof Error ? error.message : "Failed to generate QR code",
+          variant: "destructive",
+        });
+      } finally {
+        setGeneratingId(null);
       }
+    },
+    [selectedProduct, toast]
+  );
 
-      await response.json();
+  // Batch generate QR codes for products without them - production optimized
+  const batchGenerateQRCodes = useCallback(async () => {
+    const productsNeedingQR = filteredProducts.filter(
+      (p: Product) => !p.qr_code_image
+    );
 
-      // Refresh product list to show new QR code
-      await loadProducts();
-
-      const product = products.find((p: Product) => p.id === productId);
-      if (product) {
-        setSelectedProduct(product);
-        setQrDialogOpen(true);
-      }
-
+    if (productsNeedingQR.length === 0) {
       toast({
-        title: "QR Code Generated",
-        description: "QR code has been generated and saved for this product",
+        title: "Info",
+        description: "All products already have QR codes",
       });
-    } catch (error) {
-      console.error("Error generating QR code:", error);
-      toast({
-        title: "Error",
-        description: "Failed to generate QR code",
-        variant: "destructive",
-      });
+      return;
     }
-  };
 
-  const viewQRCode = (product: Product) => {
+    setBatchGenerating(true);
+    setGenerationProgress({ current: 0, total: productsNeedingQR.length });
+
+    const results = { success: 0, failed: 0 };
+
+    // Process in batches to avoid overwhelming the server
+    const batchSize = 5;
+    for (let i = 0; i < productsNeedingQR.length; i += batchSize) {
+      const batch = productsNeedingQR.slice(
+        i,
+        Math.min(i + batchSize, productsNeedingQR.length)
+      );
+
+      // Process batch in parallel
+      const batchResults = await Promise.allSettled(
+        batch.map((product) => generateQRCode(product.id))
+      );
+
+      // Track results
+      batchResults.forEach((result) => {
+        if (result.status === "fulfilled") {
+          results.success++;
+        } else {
+          results.failed++;
+        }
+      });
+
+      // Update progress
+      setGenerationProgress({
+        current: Math.min(i + batchSize, productsNeedingQR.length),
+        total: productsNeedingQR.length,
+      });
+
+      // Small delay between batches to avoid server overload
+      if (i + batchSize < productsNeedingQR.length) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+
+    // Final results notification
+    toast({
+      title: results.failed === 0 ? "Success" : "Partial Complete",
+      description:
+        results.failed === 0
+          ? `Generated QR codes for all ${results.success} products`
+          : `Generated ${results.success} QR codes, ${results.failed} failed. Retry manually for failed items.`,
+      variant: results.failed === 0 ? "default" : "destructive",
+    });
+
+    setBatchGenerating(false);
+    setGenerationProgress({ current: 0, total: 0 });
+  }, [filteredProducts, generateQRCode, toast]);
+
+  // Generate barcode if missing - can be ISBN, EAN, or product ID
+  const generateBarcode = useCallback(
+    async (productId: string) => {
+      try {
+        setGeneratingId(productId);
+        const response = await fetch(
+          `/api/products/${productId}/generate-barcode`,
+          {
+            method: "POST",
+            credentials: "include",
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to generate barcode");
+        }
+
+        const data = await response.json();
+
+        // Update local product data
+        setProducts((prev) =>
+          prev.map((p) =>
+            p.id === productId ? { ...p, barcode: data.barcode } : p
+          )
+        );
+
+        toast({
+          title: "Barcode Generated",
+          description: `Barcode: ${data.barcode}`,
+        });
+      } catch (error) {
+        console.error(`Error generating barcode for ${productId}:`, error);
+        toast({
+          title: "Error",
+          description: "Failed to generate barcode",
+          variant: "destructive",
+        });
+      } finally {
+        setGeneratingId(null);
+      }
+    },
+    [toast]
+  );
+
+  // Batch generate both QR and barcodes - optimized for scale
+  const batchGenerateAllCodes = useCallback(async () => {
+    const needsQR = filteredProducts.filter((p: Product) => !p.qr_code_image);
+    const needsBarcode = filteredProducts.filter((p: Product) => !p.barcode);
+
+    if (needsQR.length === 0 && needsBarcode.length === 0) {
+      toast({
+        title: "Info",
+        description: "All products already have QR codes and barcodes",
+      });
+      return;
+    }
+
+    setBatchGenerating(true);
+    const total = needsQR.length + needsBarcode.length;
+    setGenerationProgress({ current: 0, total });
+
+    let current = 0;
+
+    // Generate QR codes first
+    for (const product of needsQR) {
+      await generateQRCode(product.id);
+      current++;
+      setGenerationProgress({ current, total });
+    }
+
+    // Then generate barcodes
+    for (const product of needsBarcode) {
+      await generateBarcode(product.id);
+      current++;
+      setGenerationProgress({ current, total });
+    }
+
+    toast({
+      title: "Batch Generation Complete",
+      description: `Generated codes for ${total} items`,
+    });
+
+    setBatchGenerating(false);
+    setGenerationProgress({ current: 0, total: 0 });
+  }, [filteredProducts, generateQRCode, generateBarcode, toast]);
+
+  const viewQRCode = useCallback((product: Product) => {
     if (product.qr_code_image) {
       setSelectedProduct(product);
       setQrDialogOpen(true);
     } else {
       void generateQRCode(product.id);
     }
-  };
+  }, [generateQRCode]);
 
   const handleDeleteClick = (product: Product) => {
     setProductToDelete(product);
@@ -238,13 +430,13 @@ export default function Inventory() {
     try {
       // Optimistic update: remove from UI immediately
       const productId = productToDelete.id;
-      setProducts(prev => prev.filter(p => p.id !== productId));
+      setProducts((prev) => prev.filter((p) => p.id !== productId));
       setDeleteDialogOpen(false);
       setProductToDelete(null);
-      
+
       // Delete on server
       await api.deleteProduct(productId);
-      
+
       toast({
         title: "Success",
         description: "Product deleted successfully",
@@ -261,9 +453,16 @@ export default function Inventory() {
     }
   }, [productToDelete, loadProducts, toast]);
 
-  const categories = useMemo(
-    () => Array.from(new Set(products.map((p: Product) => p.category))).sort(),
-    [products]
+  const codeMissingCounts = useMemo(
+    () => ({
+      missingQR: filteredProducts.filter(
+        (p: Product) => !p.qr_code_image
+      ).length,
+      missingBarcode: filteredProducts.filter(
+        (p: Product) => !p.barcode
+      ).length,
+    }),
+    [filteredProducts]
   );
 
   return (
