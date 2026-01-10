@@ -200,33 +200,25 @@ export async function orgInvite(req: Request, res: Response) {
     : `/${invitePath}`;
   const link = `${normalizedBase}${normalizedPath}?token=${data.token}`;
 
-  // Send email and SMS in parallel (non-blocking if services not configured)
-  const sendPromises = [
-    sendInviteEmail(
-      parsed.data.email,
+  // Send email and SMS in background (fire-and-forget)
+  // Don't wait for email/SMS - return immediately for better UX
+  sendInviteEmail(
+    parsed.data.email,
+    parsed.data.full_name,
+    link,
+    "PantryPal"
+  ).catch((err) => console.error("Email send error:", err.message));
+
+  if (parsed.data.phone) {
+    sendInviteSMS(
+      parsed.data.phone,
       parsed.data.full_name,
       link,
       "PantryPal"
-    ).catch((err) => console.error("Email send error:", err.message)),
-  ];
-
-  if (parsed.data.phone) {
-    sendPromises.push(
-      sendInviteSMS(
-        parsed.data.phone,
-        parsed.data.full_name,
-        link,
-        "PantryPal"
-      ).catch((err) => console.error("SMS send error:", err.message))
-    );
+    ).catch((err) => console.error("SMS send error:", err.message));
   }
 
-  // Simulate verification delay (5 seconds) while messages are being sent
-  await Promise.all([
-    ...sendPromises,
-    new Promise((resolve) => setTimeout(resolve, 5000)),
-  ]);
-
+  // Return immediately - invite is created, messages sent in background
   return res.status(201).json({
     invite: data.invite,
     link,

@@ -661,6 +661,9 @@ function InviteUserForm({
   const [roles, setRoles] = useState<{ id: number; name: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [status, setStatus] = useState<
+    "idle" | "validating" | "sending" | "success"
+  >("idle");
 
   useEffect(() => {
     if (orgId && !org) setOrg(orgId);
@@ -707,13 +710,20 @@ function InviteUserForm({
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(inviteEmail.trim()))
       return setError("Enter a valid email");
+
     const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(
       /\/$/,
       ""
     );
     const inviteEndpoint = `${apiBase}/api/org/invite`;
     setError(null);
+    setStatus("validating");
     setSending(true);
+
+    // Simulate validation delay for visual feedback
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    setStatus("sending");
+
     const res = await fetch(apiBase ? inviteEndpoint : "/api/org/invite", {
       method: "POST",
       headers: {
@@ -728,9 +738,24 @@ function InviteUserForm({
       }),
     });
     const data = await res.json();
-    setSending(false);
-    if (!res.ok) return setError(data?.error || "Invite failed");
+
+    if (!res.ok) {
+      setStatus("idle");
+      setSending(false);
+      return setError(data?.error || "Invite failed");
+    }
+
+    setStatus("success");
     if (onSuccessLink) onSuccessLink(data.link);
+
+    // Reset form after 2 seconds
+    setTimeout(() => {
+      setSending(false);
+      setStatus("idle");
+      setInviteEmail("");
+      setFullName("");
+      setRoleId("");
+    }, 2000);
   };
 
   return (
@@ -791,7 +816,25 @@ function InviteUserForm({
           disabled={sending || roles.length === 0}
           className="w-full bg-orange-500 hover:bg-orange-600"
         >
-          {sending ? "Verifying and sending (5s)..." : "Send Invite"}
+          {status === "validating" && (
+            <>
+              <span className="inline-block animate-spin mr-2">⏳</span>
+              Validating...
+            </>
+          )}
+          {status === "sending" && (
+            <>
+              <span className="inline-block animate-spin mr-2">📧</span>
+              Sending invite...
+            </>
+          )}
+          {status === "success" && (
+            <>
+              <span className="mr-2">✅</span>
+              Invite sent!
+            </>
+          )}
+          {status === "idle" && "Send Invite"}
         </Button>
       </form>
       {error && <div className="text-red-600 text-sm">{error}</div>}
