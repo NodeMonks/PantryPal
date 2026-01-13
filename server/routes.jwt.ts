@@ -7,6 +7,8 @@ import {
   orgInvite,
   inviteAccept,
   listPendingInvites,
+  listAcceptedInvites,
+  listNonRespondedInvites,
   withdrawInvite,
   loginLimiter,
   refreshLimiter,
@@ -41,6 +43,20 @@ export function registerJwtRoutes(app: Express) {
     loadPermissions(),
     can("users:manage"),
     listPendingInvites
+  );
+  app.get(
+    "/api/org/invites/accepted",
+    auth(),
+    loadPermissions(),
+    can("users:manage"),
+    listAcceptedInvites
+  );
+  app.get(
+    "/api/org/invites/non-responded",
+    auth(),
+    loadPermissions(),
+    can("users:manage"),
+    listNonRespondedInvites
   );
   app.delete(
     "/api/org/invites/:id",

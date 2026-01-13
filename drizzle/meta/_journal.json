@@ -71,6 +71,13 @@
       "when": 1767027239818,
       "tag": "0009_add_org_vendor_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1768299790523,
+      "tag": "0010_lazy_dark_phoenix",
+      "breakpoints": true
     }
   ]
 }

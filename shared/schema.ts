@@ -444,6 +444,7 @@ export const user_invites = pgTable("user_invites", {
   token_hash: text("token_hash").notNull(),
   expires_at: timestamp("expires_at").notNull(),
   accepted_at: timestamp("accepted_at"),
+  responded_at: timestamp("responded_at"),
   created_at: timestamp("created_at").notNull().defaultNow(),
 });
 

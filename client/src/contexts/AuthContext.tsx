@@ -24,6 +24,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   hasRole: (...roles: string[]) => boolean;
   loading: boolean;
+  orgId?: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -146,6 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
         hasRole,
         loading,
+        orgId: user?.org_id,
       }}
     >
       {children}

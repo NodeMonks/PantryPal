@@ -420,10 +420,10 @@ export async function acceptInvite(
     role_id: invite.role_id,
   });
 
-  // mark invite accepted
+  // mark invite accepted and set responded_at
   await db
     .update(user_invites)
-    .set({ accepted_at: new Date() })
+    .set({ accepted_at: new Date(), responded_at: new Date() })
     .where(eq(user_invites.id, invite.id));
 
   return { user_id: userId, org_id: invite.org_id };

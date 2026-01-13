@@ -1,0 +1,1 @@
+ALTER TABLE "user_invites" ADD COLUMN "responded_at" timestamp;

@@ -57,8 +57,14 @@ const inviteBody = z.object({
 });
 const acceptInviteBody = z.object({
   token: z.string().min(16),
-  password: z.string().min(8),
-  full_name: z.string().optional(),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .regex(/[A-Z]/, "Must contain uppercase letter")
+    .regex(/[a-z]/, "Must contain lowercase letter")
+    .regex(/[0-9]/, "Must contain number")
+    .regex(/[!@#$%^&*]/, "Must contain special character (!@#$%^&*)"),
+  full_name: z.string().min(2, "Full name required").optional(),
 });
 
 export async function signup(req: Request, res: Response) {
@@ -379,5 +385,87 @@ export async function withdrawInvite(req: Request, res: Response) {
     return res
       .status(500)
       .json({ error: e.message || "Failed to withdraw invite" });
+  }
+}
+
+// List accepted invites (successful registrations)
+export async function listAcceptedInvites(req: Request, res: Response) {
+  const ctx = req.ctx;
+  if (!ctx) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const orgId = (req.query.org_id as string) || ctx.orgId;
+    if (!orgId) return res.status(400).json({ error: "org_id required" });
+
+    const accepted = await db
+      .select({
+        id: user_invites.id,
+        email: user_invites.email,
+        full_name: user_invites.full_name,
+        phone: user_invites.phone,
+        role_id: user_invites.role_id,
+        store_id: user_invites.store_id,
+        created_at: user_invites.created_at,
+        accepted_at: user_invites.accepted_at,
+        role_name: roles.name,
+      })
+      .from(user_invites)
+      .leftJoin(roles, eq(user_invites.role_id, roles.id))
+      .where(
+        and(
+          eq(user_invites.org_id, orgId as any),
+          isNotNull(user_invites.accepted_at)
+        )
+      )
+      .orderBy(desc(user_invites.accepted_at));
+
+    return res.json({ invites: accepted });
+  } catch (e: any) {
+    console.error("List accepted invites error:", e);
+    return res
+      .status(500)
+      .json({ error: e.message || "Failed to list accepted invites" });
+  }
+}
+
+// List non-responded invites (sent but not yet responded/expired)
+export async function listNonRespondedInvites(req: Request, res: Response) {
+  const ctx = req.ctx;
+  if (!ctx) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const orgId = (req.query.org_id as string) || ctx.orgId;
+    if (!orgId) return res.status(400).json({ error: "org_id required" });
+
+    const nonResponded = await db
+      .select({
+        id: user_invites.id,
+        email: user_invites.email,
+        full_name: user_invites.full_name,
+        phone: user_invites.phone,
+        role_id: user_invites.role_id,
+        store_id: user_invites.store_id,
+        created_at: user_invites.created_at,
+        expires_at: user_invites.expires_at,
+        role_name: roles.name,
+      })
+      .from(user_invites)
+      .leftJoin(roles, eq(user_invites.role_id, roles.id))
+      .where(
+        and(
+          eq(user_invites.org_id, orgId as any),
+          isNull(user_invites.accepted_at),
+          isNull(user_invites.responded_at),
+          gt(user_invites.expires_at, new Date())
+        )
+      )
+      .orderBy(desc(user_invites.created_at));
+
+    return res.json({ invites: nonResponded });
+  } catch (e: any) {
+    console.error("List non-responded invites error:", e);
+    return res
+      .status(500)
+      .json({ error: e.message || "Failed to list non-responded invites" });
   }
 }
