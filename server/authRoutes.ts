@@ -277,10 +277,20 @@ export function setupAuthRoutes(app: Express) {
           postSessionId
         );
         console.log("[AUTH] Cookie settings:", req.session?.cookie);
-        res.json({
-          message: "Login successful",
-          user,
-          sessionId: postSessionId,
+
+        // CRITICAL: Explicitly save the session to ensure the cookie is persisted
+        // This is necessary because saveUninitialized: false requires an explicit save
+        req.session?.save((saveErr) => {
+          if (saveErr) {
+            console.error("[AUTH] Failed to save session:", saveErr);
+            return res.status(500).json({ error: "Failed to save session" });
+          }
+          console.log("[AUTH] Session saved successfully for user:", user.id);
+          res.json({
+            message: "Login successful",
+            user,
+            sessionId: postSessionId,
+          });
         });
       });
     })(req, res, next);
@@ -299,6 +309,12 @@ export function setupAuthRoutes(app: Express) {
   // Get current user
   app.get("/api/auth/me", isAuthenticated, (req, res) => {
     const sid = (req as any).sessionID;
+    console.log("[AUTH] /api/auth/me - User authenticated:", {
+      userId: req.user?.id,
+      username: req.user?.username,
+      sessionId: sid,
+      isAuthenticated: req.isAuthenticated?.(),
+    });
     res.json({ user: req.user, sessionId: sid });
   });
 

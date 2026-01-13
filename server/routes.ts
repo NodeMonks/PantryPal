@@ -963,18 +963,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     })
   );
 
-  // RBAC roles API - For invite functionality
-  app.get("/api/rbac/roles", isAuthenticated, async (req, res) => {
-    try {
-      const { db } = await import("./db");
-      const { roles } = await import("../shared/schema");
-      const rolesList = await db.select().from(roles);
-      res.json(rolesList);
-    } catch (error) {
-      console.error("Error fetching roles:", error);
-      res.status(500).json({ error: "Failed to fetch roles" });
+  // RBAC roles API - For invite functionality (session-based with RBAC)
+  app.get(
+    "/api/rbac/roles",
+    isAuthenticated,
+    requireOrgId,
+    async (req, res) => {
+      try {
+        const { db } = await import("./db");
+        const {
+          roles,
+          user_roles,
+          roles: rolesTable,
+        } = await import("../shared/schema");
+        const { and, eq, inArray } = await import("drizzle-orm");
+
+        const userId = (req as any).user?.id;
+        const orgId = (req as any).org?.id;
+
+        if (!userId || !orgId) {
+          return res.json([]);
+        }
+
+        // Get user's roles in this org
+        const userRolesInOrg = await db
+          .select({ name: rolesTable.name })
+          .from(user_roles)
+          .leftJoin(rolesTable, eq(user_roles.role_id, rolesTable.id))
+          .where(
+            and(eq(user_roles.user_id, userId), eq(user_roles.org_id, orgId))
+          );
+
+        const inviterRoles = userRolesInOrg
+          .map((r) => r.name)
+          .filter(Boolean) as string[];
+
+        if (inviterRoles.length === 0) {
+          return res.json([]);
+        }
+
+        // Determine which roles this user can assign
+        const canAssignRoles = [];
+        if (inviterRoles.includes("admin") || inviterRoles.includes("owner")) {
+          canAssignRoles.push("store_manager", "inventory_manager", "cashier");
+        } else if (inviterRoles.includes("store_manager")) {
+          canAssignRoles.push("inventory_manager", "cashier");
+        }
+
+        if (canAssignRoles.length === 0) {
+          return res.json([]);
+        }
+
+        // Fetch the actual role objects
+        const rolesList = await db
+          .select()
+          .from(roles)
+          .where(inArray(roles.name, canAssignRoles as any));
+
+        res.json(rolesList);
+      } catch (error) {
+        console.error("Error fetching roles:", error);
+        res.status(500).json({ error: "Failed to fetch roles" });
+      }
     }
-  });
+  );
 
   // Organization invite API - Session-based
   app.post("/api/org/invite", isAuthenticated, async (req, res) => {

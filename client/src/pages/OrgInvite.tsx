@@ -100,7 +100,7 @@ function InviteInner() {
       /\/$/,
       ""
     );
-    const inviteEndpoint = `${apiBase}/org/invite`;
+    const inviteEndpoint = `${apiBase}/api/org/invite`;
     setError(null);
     setStatus("validating");
     setSending(true);
@@ -109,7 +109,7 @@ function InviteInner() {
     await new Promise((resolve) => setTimeout(resolve, 300));
     setStatus("sending");
 
-    const res = await fetch(apiBase ? inviteEndpoint : "/org/invite", {
+    const res = await fetch(apiBase ? inviteEndpoint : "/api/org/invite", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

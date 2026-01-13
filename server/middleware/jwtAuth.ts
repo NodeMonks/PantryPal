@@ -54,6 +54,8 @@ export function loadPermissions() {
       if (!req.ctx) return res.status(401).json({ error: "Unauthorized" });
       const { userId, orgId } = req.ctx;
 
+      console.log("loadPermissions - userId:", userId, "orgId:", orgId);
+
       // load role assignments
       const roleAssignments = await db
         .select({
@@ -69,6 +71,8 @@ export function loadPermissions() {
             orgId ? eq(user_roles.org_id, orgId) : (undefined as any)
           )
         );
+
+      console.log("loadPermissions - roleAssignments:", roleAssignments);
 
       const roleIds = roleAssignments.map((r) => r.role_id);
       const roleNames = roleAssignments
@@ -92,8 +96,11 @@ export function loadPermissions() {
       req.ctx.permissions = Array.from(new Set(permissions));
       req.ctx.stores = Array.from(new Set(stores));
 
+      console.log("loadPermissions - final ctx:", req.ctx);
+
       return next();
     } catch (e) {
+      console.error("loadPermissions error:", e);
       return res.status(500).json({ error: "Failed to load permissions" });
     }
   };

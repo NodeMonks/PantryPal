@@ -8,6 +8,7 @@ import {
   roles as rolesTable,
   user_invites,
   roles,
+  user_roles,
 } from "../../shared/schema";
 import { eq, and, isNull, gt, desc } from "drizzle-orm";
 import {
@@ -46,7 +47,7 @@ const loginBody = z.object({
   password: z.string().min(8),
 });
 const inviteBody = z.object({
-  org_id: z.string().uuid(),
+  org_id: z.string().uuid().optional(), // Will be filled from JWT context
   email: z.string().email(),
   role_id: z.number().int(),
   store_id: z.string().uuid().optional(),
@@ -147,48 +148,86 @@ export async function orgInvite(req: Request, res: Response) {
   const parsed = inviteBody.safeParse(req.body);
   if (!parsed.success)
     return res.status(400).json({ error: parsed.error.message });
-  // Enforce org scope and allowed role assignment
+
   const ctx = req.ctx;
-  if (!ctx) return res.status(401).json({ error: "Unauthorized" });
-  if (ctx.orgId && ctx.orgId !== parsed.data.org_id) {
-    return res.status(403).json({ error: "Forbidden: cross-org invite" });
+  if (!ctx || !ctx.userId || !ctx.orgId) {
+    return res.status(401).json({ error: "Unauthorized" });
   }
-  // Determine role name for requested role_id
+
+  // Use org_id from JWT context - no manual org_id needed
+  const targetOrgId = ctx.orgId;
+
+  // Verify user has a role in their org
+  const [userRoleInOrg] = await db
+    .select()
+    .from(user_roles)
+    .where(
+      and(
+        eq(user_roles.user_id, ctx.userId),
+        eq(user_roles.org_id, targetOrgId as any)
+      )
+    )
+    .limit(1);
+
+  if (!userRoleInOrg) {
+    return res.status(403).json({
+      error: "You don't have permission to invite users",
+    });
+  }
+
+  // Get target role
   const [targetRole] = await db
     .select()
     .from(rolesTable)
     .where(eq(rolesTable.id, parsed.data.role_id))
     .limit(1);
-  if (!targetRole) return res.status(400).json({ error: "Invalid role" });
-  // Allowed mapping
-  const inviterRoles = ctx.roles || [];
-  console.log("🔍 DEBUG - Inviter roles:", inviterRoles);
-  console.log("🔍 DEBUG - Target role:", targetRole.name);
+  if (!targetRole)
+    return res.status(400).json({ error: "Invalid role selected" });
+
+  // Load user's roles in this org
+  const userRolesInThisOrg = await db
+    .select({ name: rolesTable.name })
+    .from(user_roles)
+    .leftJoin(rolesTable, eq(user_roles.role_id, rolesTable.id))
+    .where(
+      and(
+        eq(user_roles.user_id, ctx.userId),
+        eq(user_roles.org_id, targetOrgId as any)
+      )
+    );
+
+  const inviterRoles = userRolesInThisOrg
+    .map((r) => r.name)
+    .filter(Boolean) as string[];
+
+  // Check permissions
   const isAdmin = inviterRoles.includes("admin");
   const isStoreOwner = inviterRoles.includes("store_owner");
   const isStoreMgr = inviterRoles.includes("store_manager");
-  const allowedForAdmin = ["store_manager", "inventory_manager", "cashier"];
-  const allowedForStoreOwner = [
-    "store_manager",
-    "inventory_manager",
-    "cashier",
-  ];
-  const allowedForStoreMgr = ["inventory_manager", "cashier"];
+
   const allowed =
     isAdmin || isStoreOwner
-      ? allowedForStoreOwner
+      ? ["store_manager", "inventory_manager", "cashier"]
       : isStoreMgr
-      ? allowedForStoreMgr
+      ? ["inventory_manager", "cashier"]
       : [];
-  console.log("✅ DEBUG - Allowed roles:", allowed);
+
   if (!allowed.includes(targetRole.name)) {
-    return res.status(403).json({ error: "Forbidden: role not assignable" });
+    return res.status(403).json({
+      error: `You cannot assign the ${targetRole.name} role`,
+    });
   }
 
-  const data = await createInvite(parsed.data as any);
+  // Create invite with org_id from JWT context
+  const inviteData = {
+    ...parsed.data,
+    org_id: targetOrgId,
+  };
+
+  const data = await createInvite(inviteData as any);
   await db.insert(audit_logs).values({
-    user_id: req.ctx?.userId as any,
-    org_id: parsed.data.org_id,
+    user_id: ctx.userId as any,
+    org_id: targetOrgId,
     action: "org:invite",
     details: `email=${parsed.data.email}`,
   });

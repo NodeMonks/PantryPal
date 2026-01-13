@@ -46,10 +46,8 @@ import {
   UserCheck,
   UserX,
   TrendingUp,
-  Copy,
   MoreVertical,
 } from "lucide-react";
-import { JWTAuthProvider, useJWTAuth } from "../contexts/JWTAuthContext";
 import { OrgIdDisplay } from "@/components/OrgIdDisplay";
 import {
   DropdownMenu,
@@ -57,6 +55,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import SendInvite from "@/components/SendInvite";
 
 interface User {
   id: number;
@@ -70,7 +69,7 @@ interface User {
 }
 
 export default function UserManagement() {
-  const { hasRole } = useAuth();
+  const { hasRole, orgId } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -488,11 +487,12 @@ export default function UserManagement() {
                         organization
                       </DialogDescription>
                     </DialogHeader>
-                    <JWTAuthProvider>
-                      <InviteUserForm
-                        onSuccessLink={() => toast.success("Invite created")}
-                      />
-                    </JWTAuthProvider>
+                    <SendInvite
+                      orgId={orgId}
+                      onSuccess={(link) =>
+                        toast.success(`Invite created: ${link}`)
+                      }
+                    />
                   </DialogContent>
                 </Dialog>
               </div>
@@ -641,307 +641,6 @@ export default function UserManagement() {
           </CardContent>
         </Card>
       </div>
-    </div>
-  );
-}
-
-// Invite User Form Component
-function InviteUserForm({
-  onSuccessLink,
-}: {
-  onSuccessLink?: (link: string) => void;
-}) {
-  const { accessToken, login, orgId, refresh } = useJWTAuth();
-  const [adminEmail, setAdminEmail] = useState("");
-  const [adminPassword, setAdminPassword] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [roleId, setRoleId] = useState<string>("");
-  const [org, setOrg] = useState<string>("");
-  const [roles, setRoles] = useState<{ id: number; name: string }[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
-  const [status, setStatus] = useState<
-    "idle" | "validating" | "sending" | "success"
-  >("idle");
-  const [pendingInvites, setPendingInvites] = useState<
-    Array<{
-      id: string;
-      email: string;
-      full_name?: string;
-      role_name: string;
-      created_at: string;
-      expires_at: string;
-    }>
-  >([]);
-  const [loadingInvites, setLoadingInvites] = useState(false);
-
-  useEffect(() => {
-    if (orgId && !org) setOrg(orgId);
-  }, [orgId, org]);
-
-  useEffect(() => {
-    if (org) loadPendingInvites();
-  }, [org]);
-
-  useEffect(() => {
-    let ignore = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/rbac/roles", {
-          credentials: "include",
-        });
-        if (!res.ok) {
-          setRoles([]);
-          return;
-        }
-        const data = await res.json();
-        if (!ignore) setRoles(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error("Failed to load roles:", err);
-        if (!ignore) setRoles([]);
-      }
-    })();
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
-  const onLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    try {
-      await login(adminEmail, adminPassword);
-    } catch (e: any) {
-      setError(e.message || "Login failed");
-    }
-  };
-
-  const onInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!org) return setError("Org ID required");
-    if (!roleId) return setError("Select a role");
-    if (!fullName.trim()) return setError("Full name required");
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(inviteEmail.trim()))
-      return setError("Enter a valid email");
-
-    const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(
-      /\/$/,
-      ""
-    );
-    const inviteEndpoint = `${apiBase}/api/org/invite`;
-    setError(null);
-    setStatus("validating");
-    setSending(true);
-
-    // Simulate validation delay for visual feedback
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    setStatus("sending");
-
-    const res = await fetch(apiBase ? inviteEndpoint : "/api/org/invite", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify({
-        org_id: org,
-        email: inviteEmail,
-        role_id: Number(roleId),
-        full_name: fullName,
-      }),
-    });
-    const data = await res.json();
-
-    if (!res.ok) {
-      setStatus("idle");
-      setSending(false);
-      return setError(data?.error || "Invite failed");
-    }
-
-    setStatus("success");
-    if (onSuccessLink) onSuccessLink(data.link);
-
-    // Reload pending invites
-    await loadPendingInvites();
-
-    // Reset form after 2 seconds
-    setTimeout(() => {
-      setSending(false);
-      setStatus("idle");
-      setInviteEmail("");
-      setFullName("");
-      setRoleId("");
-    }, 2000);
-  };
-
-  const loadPendingInvites = async () => {
-    if (!org) return;
-    setLoadingInvites(true);
-    try {
-      const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(
-        /\/$/,
-        ""
-      );
-      const endpoint = `${apiBase}/api/org/invites/pending?org_id=${org}`;
-      const res = await fetch(
-        apiBase ? endpoint : `/api/org/invites/pending?org_id=${org}`,
-        {
-          credentials: "include",
-        }
-      );
-      const data = await res.json();
-      if (res.ok && data.invites) {
-        setPendingInvites(data.invites);
-      }
-    } catch (err) {
-      console.error("Failed to load pending invites:", err);
-    } finally {
-      setLoadingInvites(false);
-    }
-  };
-
-  const withdrawInvite = async (inviteId: string) => {
-    if (!confirm("Are you sure you want to withdraw this invite?")) return;
-
-    try {
-      const apiBase = (import.meta.env.VITE_API_BASE_URL || "").replace(
-        /\/$/,
-        ""
-      );
-      const endpoint = `${apiBase}/api/org/invites/${inviteId}`;
-      const res = await fetch(
-        apiBase ? endpoint : `/api/org/invites/${inviteId}`,
-        {
-          method: "DELETE",
-          credentials: "include",
-        }
-      );
-
-      if (res.ok) {
-        await loadPendingInvites();
-        setError(null);
-      } else {
-        const data = await res.json();
-        setError(data?.error || "Failed to withdraw invite");
-      }
-    } catch (err: any) {
-      setError(err.message || "Failed to withdraw invite");
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <form onSubmit={onInvite} className="space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <Label>Org ID</Label>
-            <Input
-              value={org}
-              onChange={(e) => setOrg(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <Label>Invitee Email</Label>
-            <Input
-              type="email"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              required
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <Label>Full Name</Label>
-            <Input
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              required
-            />
-          </div>
-        </div>
-        <div>
-          <Label>Role</Label>
-          <Select value={roleId} onValueChange={setRoleId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select role" />
-            </SelectTrigger>
-            <SelectContent>
-              {roles.map((r) => (
-                <SelectItem key={r.id} value={String(r.id)}>
-                  {r.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {roles.length === 0 && (
-            <div className="text-xs text-muted-foreground mt-1">
-              No assignable roles available. You may lack permission to assign
-              roles.
-            </div>
-          )}
-        </div>
-        <Button
-          type="submit"
-          disabled={sending || roles.length === 0}
-          className="w-full bg-orange-500 hover:bg-orange-600"
-        >
-          {status === "validating" && (
-            <>
-              <span className="inline-block animate-spin mr-2">⏳</span>
-              Validating...
-            </>
-          )}
-          {status === "sending" && (
-            <>
-              <span className="inline-block animate-spin mr-2">📧</span>
-              Sending invite...
-            </>
-          )}
-          {status === "success" && (
-            <>
-              <span className="mr-2">✅</span>
-              Invite sent!
-            </>
-          )}
-          {status === "idle" && "Send Invite"}
-        </Button>
-      </form>
-      {error && <div className="text-red-600 text-sm">{error}</div>}
-
-      {/* Pending Invites Section */}
-      {pendingInvites.length > 0 && (
-        <div className="mt-6 pt-6 border-t">
-          <h3 className="text-sm font-semibold mb-3">
-            Pending Invites ({pendingInvites.length})
-          </h3>
-          <div className="space-y-2">
-            {pendingInvites.map((invite) => (
-              <div
-                key={invite.id}
-                className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md"
-              >
-                <div className="flex-1">
-                  <div className="text-sm font-medium">{invite.email}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {invite.full_name} • {invite.role_name} •{" "}
-                    {new Date(invite.created_at).toLocaleDateString()}
-                  </div>
-                </div>
-                <button
-                  onClick={() => withdrawInvite(invite.id)}
-                  className="text-xs px-2 py-1 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
-                >
-                  Withdraw
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

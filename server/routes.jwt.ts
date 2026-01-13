@@ -21,14 +21,19 @@ export function registerJwtRoutes(app: Express) {
   app.post("/api/auth/refresh", refreshLimiter, refresh);
   app.post("/api/auth/logout", auth(), logout);
 
-  // Organization invite flow
-  app.post(
-    "/api/org/invite",
-    auth(),
-    loadPermissions(),
-    can("users:manage"),
-    orgInvite
-  );
+  // Debug endpoint to check current context
+  app.get("/api/debug/context", auth(), loadPermissions(), (req, res) => {
+    return res.json({
+      userId: req.ctx?.userId,
+      orgId: req.ctx?.orgId,
+      roles: req.ctx?.roles,
+      permissions: req.ctx?.permissions,
+      stores: req.ctx?.stores,
+    });
+  });
+
+  // NOTE: Organization invite flow is handled in setupAuthRoutes (session-based)
+  // These JWT-specific endpoints use Bearer token authentication
   app.post("/api/invite/accept", inviteAccept);
   app.get(
     "/api/org/invites/pending",
@@ -45,12 +50,6 @@ export function registerJwtRoutes(app: Express) {
     withdrawInvite
   );
 
-  // RBAC helpers
-  app.get(
-    "/api/rbac/roles",
-    auth(),
-    loadPermissions(),
-    can("roles:assign"),
-    listRoles
-  );
+  // RBAC helpers - just needs roles loaded, no permission check needed
+  app.get("/api/rbac/roles", auth(), loadPermissions(), listRoles);
 }

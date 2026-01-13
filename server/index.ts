@@ -97,6 +97,33 @@ app.use(
 );
 app.use(cookieParser());
 
+// Debug middleware to log session and cookie info
+app.use((req: Request, res: Response, next: NextFunction) => {
+  // Log incoming cookies
+  if (Object.keys(req.cookies).length > 0) {
+    console.log("[COOKIES] Incoming request cookies:", {
+      path: req.path,
+      cookies: req.cookies,
+    });
+  }
+
+  // Log when response sends to check Set-Cookie header
+  const originalJson = res.json;
+  res.json = function (data: any) {
+    // Only log auth endpoints
+    if (req.path.includes("/auth")) {
+      const setCookieHeader = res.getHeader("set-cookie");
+      console.log("[COOKIES] Response headers for", req.path, {
+        setCookie: setCookieHeader,
+        sessionId: (req as any).sessionID,
+      });
+    }
+    return originalJson.call(this, data);
+  };
+
+  next();
+});
+
 const scheduleSessionCleanup = () => {
   const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
