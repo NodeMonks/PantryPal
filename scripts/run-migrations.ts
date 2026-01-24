@@ -16,9 +16,11 @@ async function runMigrations() {
     console.log("🔌 Connected to database");
 
     // First, let's check what migrations are already tracked
-    const tracked = await client.query("SELECT * FROM __drizzle_migrations ORDER BY id");
+    const tracked = await client.query(
+      "SELECT * FROM __drizzle_migrations ORDER BY id"
+    );
     console.log(`\n📋 Currently tracked migrations: ${tracked.rows.length}`);
-    tracked.rows.forEach(row => {
+    tracked.rows.forEach((row) => {
       console.log(`  - ${row.hash}`);
     });
 

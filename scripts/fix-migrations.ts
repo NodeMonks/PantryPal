@@ -35,9 +35,7 @@ async function fixMigrations() {
     console.log(`Found ${files.length} migration files`);
 
     // Check what's already applied
-    const applied = await client.query(
-      "SELECT hash FROM __drizzle_migrations"
-    );
+    const applied = await client.query("SELECT hash FROM __drizzle_migrations");
     const appliedHashes = new Set(applied.rows.map((r) => r.hash));
 
     console.log(`${appliedHashes.size} migrations already marked as applied`);

@@ -17,9 +17,15 @@ async function checkMigrations() {
       const result = await client.query(
         "SELECT * FROM __drizzle_migrations ORDER BY created_at"
       );
-      console.log(`Migrations in __drizzle_migrations table: ${result.rows.length}`);
+      console.log(
+        `Migrations in __drizzle_migrations table: ${result.rows.length}`
+      );
       result.rows.forEach((row) => {
-        console.log(`  - ${row.hash} (created: ${new Date(Number(row.created_at)).toISOString()})`);
+        console.log(
+          `  - ${row.hash} (created: ${new Date(
+            Number(row.created_at)
+          ).toISOString()})`
+        );
       });
     } catch (error: any) {
       console.log("Error reading __drizzle_migrations:", error.message);

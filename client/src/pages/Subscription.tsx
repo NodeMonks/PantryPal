@@ -80,8 +80,16 @@ export default function Subscription() {
   const [loading, setLoading] = useState<boolean>(false);
   const [razorpayReady, setRazorpayReady] = useState<boolean>(false);
   const [razorpayLoadError, setRazorpayLoadError] = useState<string | null>(
-    null
+    null,
   );
+  const [showCustomerForm, setShowCustomerForm] = useState<boolean>(false);
+  const [customerData, setCustomerData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    company: "",
+    gst: "",
+  });
 
   // Load Razorpay script on mount
   useEffect(() => {
@@ -100,7 +108,7 @@ export default function Subscription() {
     script.onerror = () => {
       setRazorpayReady(false);
       setRazorpayLoadError(
-        "Unable to load Razorpay checkout. Please check your network or disable ad blockers and try again."
+        "Unable to load Razorpay checkout. Please check your network or disable ad blockers and try again.",
       );
     };
     document.body.appendChild(script);
@@ -135,7 +143,7 @@ export default function Subscription() {
   }, []);
 
   const selectedPlanObj: Plan | undefined = plans.find(
-    (p) => p.id === selectedPlan
+    (p) => p.id === selectedPlan,
   );
 
   const startSubscription = async () => {
@@ -145,7 +153,10 @@ export default function Subscription() {
       const res = await fetch("/api/payments/create-subscription", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: selectedPlan }),
+        body: JSON.stringify({
+          plan: selectedPlan,
+          customerData: customerData.name ? customerData : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -168,8 +179,11 @@ export default function Subscription() {
           : "PantryPal Subscription",
         amount: (plan?.price || 999) * 100, // Convert to paise
         currency: "INR",
-        email: "",
-        contact: "",
+        prefill: {
+          name: customerData.name || "",
+          email: customerData.email || "",
+          contact: customerData.phone || "",
+        },
         handler: (response: any) => {
           // Step 3: Verify payment signature on backend
           verifyAndRegister(response, subscriptionId);
@@ -365,8 +379,146 @@ export default function Subscription() {
           ))}
         </div>
 
+        {/* Customer Data Collection Form */}
+        {!showCustomerForm && (
+          <Card className="border-orange-200 bg-orange-50/50 dark:bg-orange-900/10">
+            <CardContent className="p-6">
+              <div className="space-y-3">
+                <h3 className="font-semibold text-lg">
+                  Optional: Pre-fill Your Details
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Save time by entering your details now. This information will
+                  be pre-filled in the checkout form.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCustomerForm(true)}
+                  className="w-full md:w-auto"
+                >
+                  Add Your Details
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {showCustomerForm && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Your Details</CardTitle>
+              <CardDescription>
+                This information will be pre-filled in the payment form
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Full Name</label>
+                  <input
+                    type="text"
+                    value={customerData.name}
+                    onChange={(e) =>
+                      setCustomerData({ ...customerData, name: e.target.value })
+                    }
+                    placeholder="John Doe"
+                    className="w-full px-3 py-2 border rounded-md"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Email</label>
+                  <input
+                    type="email"
+                    value={customerData.email}
+                    onChange={(e) =>
+                      setCustomerData({
+                        ...customerData,
+                        email: e.target.value,
+                      })
+                    }
+                    placeholder="john@example.com"
+                    className="w-full px-3 py-2 border rounded-md"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Phone</label>
+                  <input
+                    type="tel"
+                    value={customerData.phone}
+                    onChange={(e) =>
+                      setCustomerData({
+                        ...customerData,
+                        phone: e.target.value,
+                      })
+                    }
+                    placeholder="+91 9876543210"
+                    className="w-full px-3 py-2 border rounded-md"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">
+                    Company (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={customerData.company}
+                    onChange={(e) =>
+                      setCustomerData({
+                        ...customerData,
+                        company: e.target.value,
+                      })
+                    }
+                    placeholder="Company Name"
+                    className="w-full px-3 py-2 border rounded-md"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-sm font-medium">
+                    GST Number (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={customerData.gst}
+                    onChange={(e) =>
+                      setCustomerData({ ...customerData, gst: e.target.value })
+                    }
+                    placeholder="22AAAAA0000A1Z5"
+                    className="w-full px-3 py-2 border rounded-md"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCustomerForm(false)}
+                >
+                  Skip
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* CTA Button */}
-        <div className="text-center">
+        <div className="text-center space-y-4">
+          {!razorpayReady && !razorpayLoadError && (
+            <Card className="border-orange-200 bg-orange-50 dark:bg-orange-900/20">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-center gap-3">
+                  <Loader2 className="h-5 w-5 animate-spin text-orange-500" />
+                  <div className="text-left">
+                    <p className="font-medium text-sm">
+                      Loading secure checkout...
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      This typically takes 2-3 seconds
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Button
             size="lg"
             disabled={loading || !razorpayReady}

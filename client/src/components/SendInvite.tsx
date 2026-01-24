@@ -119,8 +119,23 @@ export default function SendInvite({
       try {
         const res = await fetch("/api/rbac/roles", { credentials: "include" });
         if (res.status === 401) {
+          const errorData = await res.json().catch(() => ({}));
+          const errorMsg =
+            errorData.message ||
+            "Session expired. Your login may have timed out.";
+
+          // Auto-logout on 401 to clear invalid session
+          try {
+            await fetch("/api/auth/logout", {
+              method: "POST",
+              credentials: "include",
+            });
+          } catch (logoutErr) {
+            console.error("Auto-logout failed:", logoutErr);
+          }
+
           throw new Error(
-            "Session expired. Your login may have timed out. Please refresh the page and log in again."
+            `${errorMsg} Please refresh the page (Ctrl+R or Cmd+R) and log in again.`
           );
         }
         if (res.status === 403) {

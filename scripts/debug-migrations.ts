@@ -24,7 +24,12 @@ async function debugMigrations() {
     });
 
     // Get journal entries
-    const journalPath = path.join(process.cwd(), "drizzle", "meta", "_journal.json");
+    const journalPath = path.join(
+      process.cwd(),
+      "drizzle",
+      "meta",
+      "_journal.json"
+    );
     const journal = JSON.parse(fs.readFileSync(journalPath, "utf8"));
 
     console.log("\nJournal entries:");
@@ -34,8 +39,8 @@ async function debugMigrations() {
 
     console.log("\n\nComparing hashes:");
     journal.entries.forEach((entry: any, idx: number) => {
-      const dbRow = dbMigrations.rows.find(r => r.hash === entry.tag);
-      console.log(`${entry.tag}: ${dbRow ? '✓ Found' : '✗ Not found'}`);
+      const dbRow = dbMigrations.rows.find((r) => r.hash === entry.tag);
+      console.log(`${entry.tag}: ${dbRow ? "✓ Found" : "✗ Not found"}`);
     });
   } catch (error) {
     console.error("Error:", error);

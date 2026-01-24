@@ -6,6 +6,11 @@ import { requireOrgId } from "./middleware/tenantContext";
 import { asyncHandler } from "./middleware/errorHandler";
 import { requireRole } from "./middleware/rbac";
 import {
+  requireActiveSubscription,
+  requirePlan,
+  checkPlanLimit,
+} from "./middleware/subscription";
+import {
   productService,
   inventoryService,
   billingService,
@@ -75,13 +80,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             stores: toDisplay(starterLimits.maxStores),
             roles: {
               admin_or_owner: toDisplay(
-                starterLimits.maxRoleUsers.adminOrOwner
+                starterLimits.maxRoleUsers.adminOrOwner,
               ),
               store_manager: toDisplay(
-                starterLimits.maxRoleUsers.store_manager
+                starterLimits.maxRoleUsers.store_manager,
               ),
               inventory_manager: toDisplay(
-                starterLimits.maxRoleUsers.inventory_manager
+                starterLimits.maxRoleUsers.inventory_manager,
               ),
             },
           },
@@ -104,13 +109,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
             stores: toDisplay(premiumLimits.maxStores),
             roles: {
               admin_or_owner: toDisplay(
-                premiumLimits.maxRoleUsers.adminOrOwner
+                premiumLimits.maxRoleUsers.adminOrOwner,
               ),
               store_manager: toDisplay(
-                premiumLimits.maxRoleUsers.store_manager
+                premiumLimits.maxRoleUsers.store_manager,
               ),
               inventory_manager: toDisplay(
-                premiumLimits.maxRoleUsers.inventory_manager
+                premiumLimits.maxRoleUsers.inventory_manager,
               ),
             },
           },
@@ -124,7 +129,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ];
 
       res.status(200).json({ ok: true, plans });
-    })
+    }),
   );
 
   // Barcode/QR Code Search API - Fast product lookup by code
@@ -139,7 +144,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       code = decodeURIComponent(code).trim();
 
       console.log(
-        `🔎 Searching for product with code: "${code}" (len=${code.length}) in org: ${orgId}`
+        `🔎 Searching for product with code: "${code}" (len=${code.length}) in org: ${orgId}`,
       );
 
       const product = await productService.searchByCode(code, orgId);
@@ -150,10 +155,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log(
-        `✅ Found product ${product.id} (${product.name}) for code: "${code}"`
+        `✅ Found product ${product.id} (${product.name}) for code: "${code}"`,
       );
       res.json(product);
-    })
+    }),
   );
 
   // Quick action: Update stock quantity
@@ -201,11 +206,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id,
         delta,
         `Stock ${operation} via barcode scanner`,
-        orgId
+        orgId,
       );
 
       res.json(updatedProduct);
-    })
+    }),
   );
 
   // Products API - Different roles have different permissions
@@ -216,7 +221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const orgId = requireOrgId(req);
       const products = await productService.listProducts(orgId);
       res.json(products);
-    })
+    }),
   );
 
   app.get(
@@ -229,13 +234,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Product not found" });
       }
       res.json(product);
-    })
+    }),
   );
 
   // Only admin and manager can create products
   app.post(
     "/api/products",
     isAuthenticated,
+    requireActiveSubscription,
     requireRole("admin", "store_manager"),
     // normalize empty date strings before validation
     (req, _res, next) => {
@@ -269,13 +275,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         throw error;
       }
-    })
+    }),
   );
 
   // Only admin and manager can update products
   app.put(
     "/api/products/:id",
     isAuthenticated,
+    requireActiveSubscription,
     requireRole("admin", "store_manager"),
     (req, _res, next) => {
       if (req.body) {
@@ -291,19 +298,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const product = await productService.updateProduct(
         req.params.id,
         req.body,
-        orgId
+        orgId,
       );
       if (!product) {
         return res.status(404).json({ error: "Product not found" });
       }
       res.json(product);
-    })
+    }),
   );
 
   // Only admin and manager can delete products
   app.delete(
     "/api/products/:id",
     isAuthenticated,
+    requireActiveSubscription,
     requireRole("admin", "store_manager"),
     asyncHandler(async (req, res) => {
       const orgId = requireOrgId(req);
@@ -312,7 +320,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Product not found" });
       }
       res.json({ message: "Product deleted successfully" });
-    })
+    }),
   );
 
   // Archive product (soft delete)
@@ -325,13 +333,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const product = await productService.updateProduct(
         req.params.id,
         { is_active: false } as any,
-        orgId
+        orgId,
       );
       if (!product) {
         return res.status(404).json({ error: "Product not found" });
       }
       res.json({ message: "Product archived", product });
-    })
+    }),
   );
 
   // Unarchive product (restore)
@@ -344,13 +352,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const product = await productService.updateProduct(
         req.params.id,
         { is_active: true } as any,
-        orgId
+        orgId,
       );
       if (!product) {
         return res.status(404).json({ error: "Product not found" });
       }
       res.json({ message: "Product restored", product });
-    })
+    }),
   );
 
   // ============================
@@ -371,8 +379,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bodySchema = z.object({
         plan: z.string().default(env.SUBSCRIPTION_DEFAULT_PLAN),
         metadata: z.record(z.any()).optional(),
+        customerData: z
+          .object({
+            name: z.string().optional(),
+            email: z.string().email().optional(),
+            phone: z.string().optional(),
+            company: z.string().optional(),
+            gst: z.string().optional(),
+          })
+          .optional(),
       });
-      const { plan, metadata } = bodySchema.parse(req.body || {});
+      const { plan, metadata, customerData } = bodySchema.parse(req.body || {});
 
       // Map frontend plan keys to actual Razorpay plan_ids from environment variables
       const planMap: Record<string, string | undefined> = {
@@ -396,6 +413,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           plan_id,
           customer_notify: 1,
           total_count: 12, // e.g., for 12 months
+          notes: {
+            customer_name: customerData?.name || "",
+            customer_email: customerData?.email || "",
+            customer_phone: customerData?.phone || "",
+            company_name: customerData?.company || "",
+            gst_number: customerData?.gst || "",
+          },
         });
         res.status(200).json({
           ok: true,
@@ -410,7 +434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const message = error instanceof Error ? error.message : String(error);
         res.status(500).json({ ok: false, error: message });
       }
-    })
+    }),
   );
 
   // Verify payment signature after checkout
@@ -455,7 +479,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       res.status(200).json({ ok: true, onboardingToken });
-    })
+    }),
   );
 
   // Razorpay webhook receiver (idempotent handling recommended)
@@ -477,10 +501,157 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .json({ ok: false, error: "Invalid webhook signature" });
       }
 
-      // TODO: Persist event to payment_events table and reconcile subscription state
-      // For now, acknowledge receipt
+      // Handle different webhook events
+      const event = req.body;
+      const eventType = event.event;
+
+      console.log(`[Webhook] Received event: ${eventType}`);
+
+      try {
+        switch (eventType) {
+          case "subscription.activated":
+            await handleSubscriptionActivated(
+              event.payload.subscription.entity,
+            );
+            break;
+
+          case "subscription.charged":
+            await handleSubscriptionCharged(event.payload.payment.entity);
+            break;
+
+          case "subscription.cancelled":
+            await handleSubscriptionCancelled(
+              event.payload.subscription.entity,
+            );
+            break;
+
+          case "subscription.paused":
+          case "subscription.halted":
+            await handleSubscriptionPaused(event.payload.subscription.entity);
+            break;
+
+          case "subscription.resumed":
+            await handleSubscriptionResumed(event.payload.subscription.entity);
+            break;
+
+          case "payment.failed":
+            await handlePaymentFailed(event.payload.payment.entity);
+            break;
+
+          default:
+            console.log(`[Webhook] Unhandled event type: ${eventType}`);
+        }
+      } catch (error) {
+        console.error(`[Webhook] Error processing ${eventType}:`, error);
+        // Still return 200 to acknowledge receipt
+      }
+
       res.status(200).json({ ok: true });
-    })
+    }),
+  );
+
+  // Webhook handler functions
+  async function handleSubscriptionActivated(subscription: any) {
+    const { db } = await import("./db");
+    const { organizations } = await import("../shared/schema");
+    const { eq } = await import("drizzle-orm");
+
+    const subscriptionId = subscription.id;
+
+    await db
+      .update(organizations)
+      .set({
+        payment_status: "active",
+        subscription_id: subscriptionId,
+      })
+      .where(eq(organizations.subscription_id, subscriptionId));
+
+    console.log(`[Webhook] Subscription activated: ${subscriptionId}`);
+  }
+
+  async function handleSubscriptionCharged(payment: any) {
+    console.log(`[Webhook] Payment charged: ${payment.id}`);
+    // Could log to payment_history table here
+  }
+
+  async function handleSubscriptionCancelled(subscription: any) {
+    const { db } = await import("./db");
+    const { organizations } = await import("../shared/schema");
+    const { eq } = await import("drizzle-orm");
+
+    await db
+      .update(organizations)
+      .set({ payment_status: "inactive" })
+      .where(eq(organizations.subscription_id, subscription.id));
+
+    console.log(`[Webhook] Subscription cancelled: ${subscription.id}`);
+  }
+
+  async function handleSubscriptionPaused(subscription: any) {
+    const { db } = await import("./db");
+    const { organizations } = await import("../shared/schema");
+    const { eq } = await import("drizzle-orm");
+
+    await db
+      .update(organizations)
+      .set({ payment_status: "paused" })
+      .where(eq(organizations.subscription_id, subscription.id));
+
+    console.log(`[Webhook] Subscription paused: ${subscription.id}`);
+  }
+
+  async function handleSubscriptionResumed(subscription: any) {
+    const { db } = await import("./db");
+    const { organizations } = await import("../shared/schema");
+    const { eq } = await import("drizzle-orm");
+
+    await db
+      .update(organizations)
+      .set({ payment_status: "active" })
+      .where(eq(organizations.subscription_id, subscription.id));
+
+    console.log(`[Webhook] Subscription resumed: ${subscription.id}`);
+  }
+
+  async function handlePaymentFailed(payment: any) {
+    console.error(
+      `[Webhook] Payment failed: ${payment.id}`,
+      payment.error_description,
+    );
+    // Could send notification to organization admin
+  }
+
+  // Get subscription status for current organization
+  app.get(
+    "/api/subscription/status",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+
+      const { db } = await import("./db");
+      const { organizations } = await import("../shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      const [org] = await db
+        .select()
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+
+      if (!org) {
+        return res.status(404).json({ error: "Organization not found" });
+      }
+
+      // Get plan limits
+      const limits = getPlanLimits(org.plan_name);
+
+      res.json({
+        status: org.payment_status || "pending",
+        plan: org.plan_name || "starter",
+        subscriptionId: org.subscription_id,
+        limits,
+      });
+    }),
   );
 
   // Customers API - All authenticated users can view
@@ -491,19 +662,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const orgId = requireOrgId(req);
       const customers = await customerService.listCustomers(orgId);
       res.json(customers);
-    })
+    }),
   );
 
   app.post(
     "/api/customers",
     isAuthenticated,
+    requireActiveSubscription,
     requireRole("admin", "store_manager", "inventory_manager"),
     validateRequestBody(createCustomerRequestSchema),
     asyncHandler(async (req, res) => {
       const orgId = requireOrgId(req);
       const customer = await customerService.createCustomer(req.body, orgId);
       res.status(201).json(customer);
-    })
+    }),
   );
 
   // Bills API - All authenticated users can view
@@ -515,7 +687,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { billRepository } = await import("./repositories");
       const bills = await billRepository.findAll(orgId);
       res.json(bills);
-    })
+    }),
   );
 
   // Scalable, paginated bills endpoint with keyset pagination
@@ -542,11 +714,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const id = cursorId as string;
         const paginationCond: SQL = or(
           and(eq(bills.created_at, createdAt), lt(bills.id, id)),
-          lt(bills.created_at, createdAt)
+          lt(bills.created_at, createdAt),
         ) as unknown as SQL;
         whereCond = and(
           eq(bills.org_id, orgId),
-          paginationCond
+          paginationCond,
         ) as unknown as SQL;
       }
 
@@ -564,7 +736,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : null;
 
       res.json({ items, nextCursor, limit });
-    })
+    }),
   );
 
   app.get(
@@ -579,12 +751,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const startOfDay = new Date(
         today.getFullYear(),
         today.getMonth(),
-        today.getDate()
+        today.getDate(),
       );
       const endOfDay = new Date(
         today.getFullYear(),
         today.getMonth(),
-        today.getDate() + 1
+        today.getDate() + 1,
       );
 
       const rows = await db
@@ -594,32 +766,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
           and(
             eq(bills.org_id, orgId),
             gte(bills.created_at, startOfDay),
-            lt(bills.created_at, endOfDay)
-          )
+            lt(bills.created_at, endOfDay),
+          ),
         )
         .orderBy(desc(bills.created_at));
 
       res.json(rows);
-    })
+    }),
   );
 
   // Staff, manager, and admin can create bills
   app.post(
     "/api/bills",
     isAuthenticated,
+    requireActiveSubscription,
     requireRole("admin", "store_manager", "inventory_manager"),
     validateRequestBody(createBillRequestSchema),
     asyncHandler(async (req, res) => {
       const orgId = requireOrgId(req);
       const bill = await billingService.createBill(req.body, orgId);
       res.status(201).json(bill);
-    })
+    }),
   );
 
   // Finalize a bill to prevent further mutation
   app.patch(
     "/api/bills/:billId/finalize",
     isAuthenticated,
+    requireActiveSubscription,
     requireRole("admin", "store_manager", "inventory_manager"),
     asyncHandler(async (req, res) => {
       const orgId = requireOrgId(req);
@@ -628,10 +802,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bill = await billingService.finalizeBill(
         req.params.billId,
         orgId,
-        String(finalizedBy)
+        String(finalizedBy),
       );
       res.json(bill);
-    })
+    }),
   );
 
   // Bill items API
@@ -643,15 +817,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { billItemRepository } = await import("./repositories");
       const items = await billItemRepository.findByBillId(
         req.params.billId,
-        orgId
+        orgId,
       );
       res.json(items);
-    })
+    }),
   );
 
   app.post(
     "/api/bills/:billId/items",
     isAuthenticated,
+    requireActiveSubscription,
     requireRole("admin", "store_manager", "inventory_manager"),
     validateRequestBody(addBillItemRequestSchema),
     asyncHandler(async (req, res) => {
@@ -660,10 +835,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.params.billId,
         req.body.product_id,
         req.body.quantity,
-        orgId
+        orgId,
       );
       res.status(201).json(item);
-    })
+    }),
   );
 
   // Credit notes API
@@ -677,24 +852,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     isAuthenticated,
     asyncHandler(async (req, res) => {
       const orgId = requireOrgId(req);
-      const { billRepository, creditNoteRepository } = await import(
-        "./repositories"
-      );
+      const { billRepository, creditNoteRepository } =
+        await import("./repositories");
       const bill = await billRepository.findById(req.params.billId, orgId);
       if (!bill) {
         return res.status(404).json({ error: "Bill not found" });
       }
       const notes = await creditNoteRepository.findByBillId(
         req.params.billId,
-        orgId
+        orgId,
       );
       res.json(notes);
-    })
+    }),
   );
 
   app.post(
     "/api/bills/:billId/credit-notes",
     isAuthenticated,
+    requireActiveSubscription,
     requireRole("admin", "store_manager", "inventory_manager"),
     validateRequestBody(createCreditNoteRequestSchema),
     asyncHandler(async (req, res) => {
@@ -703,10 +878,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.params.billId,
         req.body.amount,
         req.body.reason,
-        orgId
+        orgId,
       );
       res.status(201).json(note);
-    })
+    }),
   );
 
   // ============================
@@ -732,9 +907,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       // Import metrics for monitoring
-      const { paymentsProcessed, paymentLatency, billAmount } = await import(
-        "./middleware/prometheus"
-      );
+      const { paymentsProcessed, paymentLatency, billAmount } =
+        await import("./middleware/prometheus");
       const paymentStart = Date.now();
 
       try {
@@ -784,7 +958,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           try {
             // Verify payment with Razorpay (optional - webhook is primary)
             console.log(
-              `💳 Razorpay payment ${razorpay_payment_id} recorded for bill ${billId}`
+              `💳 Razorpay payment ${razorpay_payment_id} recorded for bill ${billId}`,
             );
           } catch (err) {
             console.error("Razorpay verification failed:", err);
@@ -804,11 +978,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .update(bills)
           .set({
             payment_method: method,
-            payment_id: razorpay_payment_id,
-            payment_status: "completed",
             finalized_at: new Date(),
-            finalized_by: req.user?.id || "system",
-            notes: notes || undefined,
+            finalized_by: (req.user as any)?.id?.toString() || "system",
           })
           .where(and(eq(bills.id, billId), eq(bills.org_id, orgId)))
           .returning();
@@ -825,7 +996,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         billAmount.observe({ payment_method: method }, amount);
 
         console.log(
-          `✅ Payment processed: ${method} for bill ${billId}, amount ₹${amount}`
+          `✅ Payment processed: ${method} for bill ${billId}, amount ₹${amount}`,
         );
 
         res.json({
@@ -838,7 +1009,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Payment processing error:", error);
         throw error;
       }
-    })
+    }),
   );
 
   /**
@@ -867,7 +1038,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: true,
         message: `Receipt will be sent to ${email}`,
       });
-    })
+    }),
   );
 
   /**
@@ -893,11 +1064,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         bill_number: bill.bill_number,
         amount: bill.final_amount || bill.total_amount,
         payment_method: bill.payment_method,
-        payment_status: bill.payment_status || "pending",
-        payment_id: bill.payment_id,
         finalized_at: bill.finalized_at,
       });
-    })
+    }),
   );
 
   // Inventory transactions API
@@ -912,12 +1081,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? await inventoryTransactionRepository.findByProductId(productId, orgId)
         : await inventoryTransactionRepository.findAll(orgId);
       res.json(transactions);
-    })
+    }),
   );
 
   app.post(
     "/api/inventory-transactions",
     isAuthenticated,
+    requireActiveSubscription,
     requireRole("admin", "store_manager"),
     asyncHandler(async (req, res) => {
       const orgId = requireOrgId(req);
@@ -937,7 +1107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           reference_type || "adjustment",
           reference_id || null,
           notes || null,
-          orgId
+          orgId,
         );
       } else if (transaction_type === "out") {
         result = await inventoryService.recordStockOut(
@@ -946,7 +1116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           reference_type || "adjustment",
           reference_id || null,
           notes || null,
-          orgId
+          orgId,
         );
       } else {
         // adjustment
@@ -955,78 +1125,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
           product_id,
           delta,
           notes || "adjustment",
-          orgId
+          orgId,
         );
         result = adj;
       }
       res.status(201).json(result.transaction);
-    })
+    }),
   );
 
   // RBAC roles API - For invite functionality (session-based with RBAC)
-  app.get(
-    "/api/rbac/roles",
-    isAuthenticated,
-    requireOrgId,
-    async (req, res) => {
-      try {
-        const { db } = await import("./db");
-        const {
-          roles,
-          user_roles,
-          roles: rolesTable,
-        } = await import("../shared/schema");
-        const { and, eq, inArray } = await import("drizzle-orm");
+  app.get("/api/rbac/roles", isAuthenticated, async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const {
+        roles,
+        user_roles,
+        roles: rolesTable,
+      } = await import("../shared/schema");
+      const { and, eq, inArray } = await import("drizzle-orm");
 
-        const userId = (req as any).user?.id;
-        const orgId = (req as any).org?.id;
+      const userId = (req as any).user?.id;
+      const orgId = (req as any).user?.orgId;
 
-        if (!userId || !orgId) {
-          return res.json([]);
-        }
-
-        // Get user's roles in this org
-        const userRolesInOrg = await db
-          .select({ name: rolesTable.name })
-          .from(user_roles)
-          .leftJoin(rolesTable, eq(user_roles.role_id, rolesTable.id))
-          .where(
-            and(eq(user_roles.user_id, userId), eq(user_roles.org_id, orgId))
-          );
-
-        const inviterRoles = userRolesInOrg
-          .map((r) => r.name)
-          .filter(Boolean) as string[];
-
-        if (inviterRoles.length === 0) {
-          return res.json([]);
-        }
-
-        // Determine which roles this user can assign
-        const canAssignRoles = [];
-        if (inviterRoles.includes("admin") || inviterRoles.includes("owner")) {
-          canAssignRoles.push("store_manager", "inventory_manager", "cashier");
-        } else if (inviterRoles.includes("store_manager")) {
-          canAssignRoles.push("inventory_manager", "cashier");
-        }
-
-        if (canAssignRoles.length === 0) {
-          return res.json([]);
-        }
-
-        // Fetch the actual role objects
-        const rolesList = await db
-          .select()
-          .from(roles)
-          .where(inArray(roles.name, canAssignRoles as any));
-
-        res.json(rolesList);
-      } catch (error) {
-        console.error("Error fetching roles:", error);
-        res.status(500).json({ error: "Failed to fetch roles" });
+      if (!userId || !orgId) {
+        console.log("[RBAC] Missing userId or orgId:", { userId, orgId });
+        return res.json([]);
       }
+
+      // Get user's roles in this org
+      const userRolesInOrg = await db
+        .select({ name: rolesTable.name })
+        .from(user_roles)
+        .leftJoin(rolesTable, eq(user_roles.role_id, rolesTable.id))
+        .where(
+          and(eq(user_roles.user_id, userId), eq(user_roles.org_id, orgId)),
+        );
+
+      const inviterRoles = userRolesInOrg
+        .map((r) => r.name)
+        .filter(Boolean) as string[];
+
+      if (inviterRoles.length === 0) {
+        return res.json([]);
+      }
+
+      // Determine which roles this user can assign
+      const canAssignRoles = [];
+      if (inviterRoles.includes("admin") || inviterRoles.includes("owner")) {
+        canAssignRoles.push("store_manager", "inventory_manager", "cashier");
+      } else if (inviterRoles.includes("store_manager")) {
+        canAssignRoles.push("inventory_manager", "cashier");
+      }
+
+      if (canAssignRoles.length === 0) {
+        return res.json([]);
+      }
+
+      // Fetch the actual role objects
+      const rolesList = await db
+        .select()
+        .from(roles)
+        .where(inArray(roles.name, canAssignRoles as any));
+
+      res.json(rolesList);
+    } catch (error) {
+      console.error("Error fetching roles:", error);
+      res.status(500).json({ error: "Failed to fetch roles" });
     }
-  );
+  });
 
   // Organization invite API - Session-based
   app.post("/api/org/invite", isAuthenticated, async (req, res) => {
@@ -1078,7 +1244,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .status(500)
         .json({ error: "Failed to send invite", details: error.message });
     }
-  }); // Dashboard stats API - All authenticated users
+  });
+
+  // Pending invites API - Session-based (for SendInvite component)
+  app.get("/api/org/invites/pending", isAuthenticated, async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { user_invites, roles } = await import("../shared/schema");
+      const { and, eq, isNull, gt, desc } = await import("drizzle-orm");
+
+      const orgId = (req.query.org_id as string) || (req.user as any)?.orgId;
+
+      if (!orgId) {
+        return res.status(400).json({ error: "org_id required" });
+      }
+
+      // Fetch pending invites (not accepted, not expired)
+      const pending = await db
+        .select({
+          id: user_invites.id,
+          email: user_invites.email,
+          full_name: user_invites.full_name,
+          phone: user_invites.phone,
+          role_id: user_invites.role_id,
+          store_id: user_invites.store_id,
+          created_at: user_invites.created_at,
+          expires_at: user_invites.expires_at,
+          accepted_at: user_invites.accepted_at,
+          role_name: roles.name,
+        })
+        .from(user_invites)
+        .leftJoin(roles, eq(user_invites.role_id, roles.id))
+        .where(
+          and(
+            eq(user_invites.org_id, orgId as any),
+            isNull(user_invites.accepted_at),
+            gt(user_invites.expires_at, new Date()),
+          ),
+        )
+        .orderBy(desc(user_invites.created_at));
+
+      return res.json({ invites: pending });
+    } catch (error: any) {
+      console.error("Error fetching pending invites:", error);
+      return res.status(500).json({ error: "Failed to load pending invites" });
+    }
+  });
+
+  // Dashboard stats API - All authenticated users
   app.get(
     "/api/dashboard/stats",
     isAuthenticated,
@@ -1092,7 +1305,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const totalRevenue = allBills.reduce(
         (sum, bill) => sum + Number(bill.final_amount || 0),
-        0
+        0,
       );
 
       const stats = {
@@ -1106,12 +1319,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const startOfDay = new Date(
             today.getFullYear(),
             today.getMonth(),
-            today.getDate()
+            today.getDate(),
           );
           const endOfDay = new Date(
             today.getFullYear(),
             today.getMonth(),
-            today.getDate() + 1
+            today.getDate() + 1,
           );
           const rows = await db
             .select()
@@ -1120,8 +1333,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               and(
                 eq(bills.org_id, orgId),
                 gte(bills.created_at, startOfDay),
-                lt(bills.created_at, endOfDay)
-              )
+                lt(bills.created_at, endOfDay),
+              ),
             );
           return rows.length;
         })(),
@@ -1133,16 +1346,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       res.json(stats);
-    })
+    }),
   );
 
   // Get user's organization and store details
   app.get("/api/profile/organization", isAuthenticated, async (req, res) => {
     try {
       const { db } = await import("./db");
-      const { user_roles, organizations, stores, roles } = await import(
-        "../shared/schema"
-      );
+      const { user_roles, organizations, stores, roles } =
+        await import("../shared/schema");
       const { eq } = await import("drizzle-orm");
 
       const userId = (req.user as any)?.id;

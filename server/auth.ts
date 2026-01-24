@@ -6,8 +6,10 @@ import { eq } from "drizzle-orm";
 import type { Express } from "express";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import connectPgSimple from "connect-pg-simple";
 import bcrypt from "bcrypt";
 import { env, isProduction } from "./config/env";
+import pg from "pg";
 
 const SALT_ROUNDS = 10;
 
@@ -130,6 +132,8 @@ passport.deserializeUser(async (id: number, done) => {
 // Setup authentication middleware
 export function setupAuth(app: Express) {
   const MemoryStore = createMemoryStore(session);
+  const PgStore = connectPgSimple(session);
+
   // Determine if we should mark cookies as secure:
   // Use validated env var SESSION_SECURE but automatically disable on localhost/127.0.0.1 when not behind HTTPS.
   const host = process.env.HOST || "127.0.0.1";
@@ -137,15 +141,37 @@ export function setupAuth(app: Express) {
   const secureCookie = env.SESSION_SECURE && !runningOnLocalHost;
   const sameSite = env.SESSION_SAME_SITE;
 
+  // Determine session store based on configuration
+  let sessionStore: session.Store;
+  if (env.SESSION_STORE === "postgres" && env.DATABASE_URL) {
+    console.log("🗄️  Using PostgreSQL session store");
+    // Create a separate pool for sessions to avoid connection conflicts
+    const sessionPool = new pg.Pool({
+      connectionString: env.DATABASE_URL,
+    });
+
+    sessionStore = new PgStore({
+      pool: sessionPool,
+      tableName: "express_sessions", // Different from JWT sessions table
+      createTableIfMissing: true,
+      pruneSessionInterval: 60 * 15, // Prune expired sessions every 15 minutes
+    });
+  } else {
+    console.log(
+      "⚠️  Using in-memory session store (sessions will be lost on restart)"
+    );
+    sessionStore = new MemoryStore({
+      checkPeriod: 86400000,
+    });
+  }
+
   // Session middleware
   app.use(
     session({
       secret: env.SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
-      store: new MemoryStore({
-        checkPeriod: 86400000,
-      }),
+      store: sessionStore,
       cookie: {
         maxAge: Number(env.SESSION_MAX_AGE) || 24 * 60 * 60 * 1000,
         httpOnly: env.SESSION_HTTP_ONLY,
@@ -170,7 +196,24 @@ export function isAuthenticated(req: any, res: any, next: any) {
   if (req.isAuthenticated()) {
     return next();
   }
-  res.status(401).json({ error: "Unauthorized" });
+
+  // If session exists but user is not authenticated, destroy the invalid session
+  if (req.session) {
+    console.log("[AUTH] Invalid session detected, destroying...", {
+      sessionID: req.sessionID,
+      hasUser: !!req.user,
+    });
+    req.session.destroy((err: any) => {
+      if (err) {
+        console.error("[AUTH] Error destroying invalid session:", err);
+      }
+    });
+  }
+
+  res.status(401).json({
+    error: "Unauthorized",
+    message: "Session expired or invalid. Please log in again.",
+  });
 }
 
 // Middleware to check user role

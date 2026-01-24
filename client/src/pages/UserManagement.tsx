@@ -55,7 +55,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import SendInvite from "@/components/SendInvite";
+import { usePlanLimits } from "@/hooks/useSubscription";
+import { Link } from "react-router-dom";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface User {
   id: number;
@@ -70,6 +72,7 @@ interface User {
 
 export default function UserManagement() {
   const { hasRole, orgId } = useAuth();
+  const { limits, canAddUser } = usePlanLimits();
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -77,18 +80,18 @@ export default function UserManagement() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [newUser, setNewUser] = useState({
-    username: "",
     email: "",
-    password: "",
     role: "inventory_manager",
     full_name: "",
     phone: "",
+    store_id: "",
   });
+  const [stores, setStores] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
     fetchUsers();
+    fetchStores();
   }, []);
 
   useEffect(() => {
@@ -100,7 +103,7 @@ export default function UserManagement() {
           user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
           user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
           (user.full_name &&
-            user.full_name.toLowerCase().includes(searchTerm.toLowerCase()))
+            user.full_name.toLowerCase().includes(searchTerm.toLowerCase())),
       );
     }
 
@@ -110,7 +113,7 @@ export default function UserManagement() {
 
     if (statusFilter !== "all") {
       filtered = filtered.filter((user) =>
-        statusFilter === "active" ? user.is_active : !user.is_active
+        statusFilter === "active" ? user.is_active : !user.is_active,
       );
     }
 
@@ -135,10 +138,47 @@ export default function UserManagement() {
     }
   };
 
+  const fetchStores = async () => {
+    try {
+      const response = await fetch("/api/stores", {
+        credentials: "include",
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setStores(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch stores:", error);
+    }
+  };
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validation
+    if (
+      !newUser.email ||
+      !newUser.full_name ||
+      !newUser.phone ||
+      !newUser.role
+    ) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newUser.email)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    if (newUser.phone.length < 10) {
+      toast.error("Please enter a valid phone number (min 10 digits)");
+      return;
+    }
+
     try {
-      const response = await fetch("/api/auth/register", {
+      const response = await fetch("/api/auth/create-user", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newUser),
@@ -146,15 +186,17 @@ export default function UserManagement() {
       });
 
       if (response.ok) {
-        toast.success("User created successfully");
+        const data = await response.json();
+        toast.success(
+          "User created successfully! Login credentials have been sent via email.",
+        );
         setIsDialogOpen(false);
         setNewUser({
-          username: "",
           email: "",
-          password: "",
           role: "inventory_manager",
           full_name: "",
           phone: "",
+          store_id: "",
         });
         fetchUsers();
       } else {
@@ -353,7 +395,7 @@ export default function UserManagement() {
                   <DialogTrigger asChild>
                     <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white">
                       <UserPlus className="h-4 w-4 mr-2" />
-                      Add User
+                      Create User
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-2xl">
@@ -366,16 +408,17 @@ export default function UserManagement() {
                     <form onSubmit={handleCreateUser}>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
                         <div className="space-y-2">
-                          <Label htmlFor="username">Username *</Label>
+                          <Label htmlFor="full_name">Full Name *</Label>
                           <Input
-                            id="username"
-                            value={newUser.username}
+                            id="full_name"
+                            value={newUser.full_name}
                             onChange={(e) =>
                               setNewUser({
                                 ...newUser,
-                                username: e.target.value,
+                                full_name: e.target.value,
                               })
                             }
+                            placeholder="John Doe"
                             required
                           />
                         </div>
@@ -389,22 +432,21 @@ export default function UserManagement() {
                             onChange={(e) =>
                               setNewUser({ ...newUser, email: e.target.value })
                             }
+                            placeholder="john@example.com"
                             required
                           />
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="password">Password *</Label>
+                          <Label htmlFor="phone">Phone *</Label>
                           <Input
-                            id="password"
-                            type="password"
-                            value={newUser.password}
+                            id="phone"
+                            type="tel"
+                            value={newUser.phone}
                             onChange={(e) =>
-                              setNewUser({
-                                ...newUser,
-                                password: e.target.value,
-                              })
+                              setNewUser({ ...newUser, phone: e.target.value })
                             }
+                            placeholder="+1234567890"
                             required
                           />
                         </div>
@@ -433,29 +475,41 @@ export default function UserManagement() {
                           </Select>
                         </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="full_name">Full Name</Label>
-                          <Input
-                            id="full_name"
-                            value={newUser.full_name}
-                            onChange={(e) =>
+                        <div className="space-y-2 md:col-span-2">
+                          <Label htmlFor="store_id">Store (Optional)</Label>
+                          <Select
+                            value={newUser.store_id || "none"}
+                            onValueChange={(value) =>
                               setNewUser({
                                 ...newUser,
-                                full_name: e.target.value,
+                                store_id: value === "none" ? "" : value,
                               })
                             }
-                          />
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a store" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">
+                                No specific store
+                              </SelectItem>
+                              {stores.map((store) => (
+                                <SelectItem key={store.id} value={store.id}>
+                                  {store.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="phone">Phone</Label>
-                          <Input
-                            id="phone"
-                            value={newUser.phone}
-                            onChange={(e) =>
-                              setNewUser({ ...newUser, phone: e.target.value })
-                            }
-                          />
+                        <div className="space-y-2 md:col-span-2">
+                          <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md">
+                            <p className="text-sm text-blue-700 dark:text-blue-300">
+                              <strong>Note:</strong> A secure password will be
+                              automatically generated and sent to the user's
+                              email address.
+                            </p>
+                          </div>
                         </div>
                       </div>
                       <DialogFooter>
@@ -467,32 +521,6 @@ export default function UserManagement() {
                         </Button>
                       </DialogFooter>
                     </form>
-                  </DialogContent>
-                </Dialog>
-                <Dialog
-                  open={isInviteDialogOpen}
-                  onOpenChange={setIsInviteDialogOpen}
-                >
-                  <DialogTrigger asChild>
-                    <Button variant="outline" className="w-full">
-                      <UserPlus className="h-4 w-4 mr-2" />
-                      Invite User
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle>Invite User</DialogTitle>
-                      <DialogDescription>
-                        Send an invitation link to a user to join your
-                        organization
-                      </DialogDescription>
-                    </DialogHeader>
-                    <SendInvite
-                      orgId={orgId}
-                      onSuccess={(link) =>
-                        toast.success(`Invite created: ${link}`)
-                      }
-                    />
                   </DialogContent>
                 </Dialog>
               </div>

@@ -9,6 +9,8 @@ import { requireOrgId } from "./middleware/tenantContext";
 import { registerSchema, loginSchema } from "../shared/schema";
 import { verifyAccessToken } from "./utils/jwt";
 import { getPlanLimits } from "./utils/planLimits";
+import { sendUserCredentialsEmail } from "./services/emailService";
+import crypto from "crypto";
 
 export function setupAuthRoutes(app: Express) {
   // Register new user (admin only for creating other users)
@@ -63,6 +65,146 @@ export function setupAuthRoutes(app: Express) {
       });
     }
   });
+
+  // Create user with generated password (admin/store_manager only)
+  app.post(
+    "/api/auth/create-user",
+    isAuthenticated,
+    hasRole("admin", "store_manager"),
+    async (req, res) => {
+      try {
+        const { email, full_name, phone, role, store_id } = req.body;
+
+        // Validation
+        if (!email || !full_name || !phone || !role) {
+          return res.status(400).json({
+            error: "Missing required fields: email, full_name, phone, role",
+          });
+        }
+
+        // Email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          return res.status(400).json({ error: "Invalid email format" });
+        }
+
+        // Phone validation
+        if (phone.length < 10) {
+          return res
+            .status(400)
+            .json({ error: "Phone number must be at least 10 digits" });
+        }
+
+        // Check if email already exists
+        const existingEmail = await db
+          .select()
+          .from(users)
+          .where(eq(users.email, email))
+          .limit(1);
+
+        if (existingEmail.length > 0) {
+          return res.status(400).json({ error: "Email already exists" });
+        }
+
+        // Generate a secure random password
+        const generatePassword = (): string => {
+          const length = 12;
+          const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+          const lowercase = "abcdefghijklmnopqrstuvwxyz";
+          const numbers = "0123456789";
+          const special = "!@#$%^&*";
+          const all = uppercase + lowercase + numbers + special;
+
+          // Ensure at least one character from each category
+          let password =
+            uppercase[Math.floor(Math.random() * uppercase.length)] +
+            lowercase[Math.floor(Math.random() * lowercase.length)] +
+            numbers[Math.floor(Math.random() * numbers.length)] +
+            special[Math.floor(Math.random() * special.length)];
+
+          // Fill the rest randomly
+          for (let i = password.length; i < length; i++) {
+            password += all[Math.floor(Math.random() * all.length)];
+          }
+
+          // Shuffle the password
+          return password
+            .split("")
+            .sort(() => Math.random() - 0.5)
+            .join("");
+        };
+
+        const generatedPassword = generatePassword();
+        const hashedPassword = hashPassword(generatedPassword);
+
+        // Use email as username (can be made unique by adding timestamp if needed)
+        const username = email.split("@")[0] + "_" + Date.now();
+
+        // Get the current user's org context
+        const currentUser = req.user as any;
+        const orgId = currentUser?.orgId;
+
+        // Create user
+        const [newUser] = await db
+          .insert(users)
+          .values({
+            username,
+            email,
+            password: hashedPassword,
+            full_name,
+            phone,
+            role,
+            is_active: true,
+          })
+          .returning();
+
+        // If store_id is provided and orgId exists, create user_role entry
+        if (orgId) {
+          const { roles } = await import("../shared/schema");
+          const [userRole] = await db
+            .select()
+            .from(roles)
+            .where(eq(roles.name, role))
+            .limit(1);
+
+          if (userRole) {
+            await db.insert(user_roles).values({
+              user_id: newUser.id,
+              org_id: orgId,
+              store_id: store_id || null,
+              role_id: userRole.id,
+            });
+          }
+        }
+
+        // Send credentials via email (non-blocking)
+        const orgName =
+          process.env.ORG_NAME || process.env.APP_NAME || "PantryPal";
+        sendUserCredentialsEmail(
+          email,
+          full_name,
+          email,
+          generatedPassword,
+          orgName,
+        ).catch((err) =>
+          console.error("Failed to send credentials email:", err.message),
+        );
+
+        const { password: _, ...userWithoutPassword } = newUser;
+        res.status(201).json({
+          message:
+            "User created successfully. Login credentials have been sent to their email.",
+          user: userWithoutPassword,
+        });
+      } catch (error: any) {
+        console.error("Create user error:", error);
+        res.status(500).json({
+          error: "Failed to create user",
+          details: error.message,
+        });
+      }
+    },
+  );
 
   // Register organization + initial admin + stores
   // Used by external microservice after payment/verification
@@ -274,7 +416,7 @@ export function setupAuthRoutes(app: Express) {
         const postSessionId = (req as any).sessionID;
         console.log(
           "[AUTH] Login successful, sessionID after auth:",
-          postSessionId
+          postSessionId,
         );
         console.log("[AUTH] Cookie settings:", req.session?.cookie);
 
@@ -381,7 +523,7 @@ export function setupAuthRoutes(app: Express) {
         console.error("Error fetching users:", error);
         res.status(500).json({ error: "Failed to fetch users" });
       }
-    }
+    },
   );
 
   // Update user role (admin only)
@@ -396,7 +538,7 @@ export function setupAuthRoutes(app: Express) {
 
         if (
           !["admin", "store_manager", "inventory_manager", "cashier"].includes(
-            role
+            role,
           )
         ) {
           return res.status(400).json({ error: "Invalid role" });
@@ -421,7 +563,7 @@ export function setupAuthRoutes(app: Express) {
         console.error("Error updating user role:", error);
         res.status(500).json({ error: "Failed to update user role" });
       }
-    }
+    },
   );
 
   // Deactivate user (admin only)
@@ -448,7 +590,7 @@ export function setupAuthRoutes(app: Express) {
         console.error("Error deactivating user:", error);
         res.status(500).json({ error: "Failed to deactivate user" });
       }
-    }
+    },
   );
 
   // Activate user (admin only)
@@ -475,6 +617,6 @@ export function setupAuthRoutes(app: Express) {
         console.error("Error activating user:", error);
         res.status(500).json({ error: "Failed to activate user" });
       }
-    }
+    },
   );
 }
