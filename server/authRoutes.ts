@@ -305,7 +305,8 @@ export function setupAuthRoutes(app: Express) {
           business_state: vendor.business_state || null,
           business_pin: vendor.business_pin || null,
           kyc_status: "pending", // Requires admin verification
-          payment_status: "pending", // Set from Razorpay webhook later
+          // If onboarding token with subscription, mark as active
+          payment_status: subscriptionIdFromToken ? "active" : "pending",
           subscription_id: subscriptionIdFromToken || null,
           plan_name: planNameFromToken || "starter",
         })

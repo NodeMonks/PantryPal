@@ -16,17 +16,17 @@ function ensureMinLengthEnv(name: string, minLength: number, fallback: string) {
 ensureMinLengthEnv(
   "SESSION_SECRET",
   32,
-  "test-session-secret-min-32-chars-long-for-testing"
+  "test-session-secret-min-32-chars-long-for-testing",
 );
 ensureMinLengthEnv(
   "JWT_ACCESS_SECRET",
   32,
-  "test-jwt-access-secret-min-32-chars-long-for-testing"
+  "test-jwt-access-secret-min-32-chars-long-for-testing",
 );
 ensureMinLengthEnv(
   "JWT_REFRESH_SECRET",
   32,
-  "test-jwt-refresh-secret-min-32-chars-long-for-testing"
+  "test-jwt-refresh-secret-min-32-chars-long-for-testing",
 );
 
 // Ensure the app DB client (server/db.ts) points at the test DB.
@@ -35,7 +35,7 @@ const connectionString =
 
 if (!connectionString) {
   throw new Error(
-    "Missing TEST_DATABASE_URL or DATABASE_URL for running tests"
+    "Missing TEST_DATABASE_URL or DATABASE_URL for running tests",
   );
 }
 
@@ -53,52 +53,52 @@ async function ensureOrganizationsColumns(pool: Pool) {
   // based on `shared/schema.ts`. If a CI DB is slightly behind, we can safely
   // add missing columns without trying to replay the entire migration history.
   await pool.query(
-    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS gst_number text;`
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS gst_number text;`,
   );
   await pool.query(
-    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS owner_name text;`
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS owner_name text;`,
   );
   await pool.query(
-    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS owner_phone text;`
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS owner_phone text;`,
   );
   await pool.query(
-    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS owner_email text;`
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS owner_email text;`,
   );
   await pool.query(
-    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS msme_number text;`
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS msme_number text;`,
   );
   await pool.query(
-    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS business_address text;`
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS business_address text;`,
   );
   await pool.query(
-    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS business_city text;`
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS business_city text;`,
   );
   await pool.query(
-    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS business_state text;`
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS business_state text;`,
   );
   await pool.query(
-    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS business_pin text;`
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS business_pin text;`,
   );
   await pool.query(
-    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS kyc_status text DEFAULT 'pending';`
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS kyc_status text DEFAULT 'pending';`,
   );
   await pool.query(
-    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS verified_at timestamp;`
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS verified_at timestamp;`,
   );
   await pool.query(
-    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS verified_by integer;`
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS verified_by integer;`,
   );
   await pool.query(
-    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS verification_notes text;`
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS verification_notes text;`,
   );
   await pool.query(
-    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS payment_status text DEFAULT 'pending';`
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS payment_status text DEFAULT 'pending';`,
   );
   await pool.query(
-    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS subscription_id text;`
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS subscription_id text;`,
   );
   await pool.query(
-    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS plan_name text DEFAULT 'starter';`
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS plan_name text DEFAULT 'starter';`,
   );
 }
 
@@ -106,15 +106,15 @@ async function ensureProductsColumns(pool: Pool) {
   // Some CI DBs can lag behind the latest schema. Drizzle selects all columns
   // defined in `shared/schema.ts`, so missing columns break tests.
   await pool.query(
-    `ALTER TABLE products ADD COLUMN IF NOT EXISTS qr_code_image text;`
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS qr_code_image text;`,
   );
 
   // These are commonly added alongside qr_code_image in newer schemas.
   await pool.query(
-    `ALTER TABLE products ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true;`
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true;`,
   );
   await pool.query(
-    `ALTER TABLE products ADD COLUMN IF NOT EXISTS description text;`
+    `ALTER TABLE products ADD COLUMN IF NOT EXISTS description text;`,
   );
 }
 
@@ -125,7 +125,7 @@ async function ensureProductsQrCodeUniquenessPerTenant(pool: Pool) {
 
   // Drop either a constraint or index with this name, if present.
   await pool.query(
-    `ALTER TABLE products DROP CONSTRAINT IF EXISTS products_qr_code_unique;`
+    `ALTER TABLE products DROP CONSTRAINT IF EXISTS products_qr_code_unique;`,
   );
   await pool.query(`DROP INDEX IF EXISTS products_qr_code_unique;`);
 
@@ -133,28 +133,28 @@ async function ensureProductsQrCodeUniquenessPerTenant(pool: Pool) {
   await pool.query(
     `CREATE UNIQUE INDEX IF NOT EXISTS products_qr_code_unique
      ON products (org_id, qr_code)
-     WHERE qr_code IS NOT NULL;`
+     WHERE qr_code IS NOT NULL;`,
   );
 }
 
 async function ensureBillsColumns(pool: Pool) {
   // Older schemas may not have finalization metadata yet.
   await pool.query(
-    `ALTER TABLE bills ADD COLUMN IF NOT EXISTS finalized_at timestamp;`
+    `ALTER TABLE bills ADD COLUMN IF NOT EXISTS finalized_at timestamp;`,
   );
   await pool.query(
-    `ALTER TABLE bills ADD COLUMN IF NOT EXISTS finalized_by text;`
+    `ALTER TABLE bills ADD COLUMN IF NOT EXISTS finalized_by text;`,
   );
 
   // Common bill fields that appear in shared/schema.ts
   await pool.query(
-    `ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_amount numeric(10, 2) DEFAULT '0';`
+    `ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_amount numeric(10, 2) DEFAULT '0';`,
   );
   await pool.query(
-    `ALTER TABLE bills ADD COLUMN IF NOT EXISTS tax_amount numeric(10, 2) DEFAULT '0';`
+    `ALTER TABLE bills ADD COLUMN IF NOT EXISTS tax_amount numeric(10, 2) DEFAULT '0';`,
   );
   await pool.query(
-    `ALTER TABLE bills ADD COLUMN IF NOT EXISTS payment_method text DEFAULT 'cash';`
+    `ALTER TABLE bills ADD COLUMN IF NOT EXISTS payment_method text DEFAULT 'cash';`,
   );
 }
 
@@ -169,24 +169,31 @@ async function ensureCreditNotesTable(pool: Pool) {
       amount numeric(10, 2) NOT NULL,
       reason text,
       created_at timestamp NOT NULL DEFAULT now()
-    );`
+    );`,
   );
 
   // If the table exists but is missing newer columns (or was created without them), patch it.
   await pool.query(
-    `ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS org_id uuid;`
+    `ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS org_id uuid;`,
   );
   await pool.query(
-    `ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS bill_id uuid;`
+    `ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS bill_id uuid;`,
   );
   await pool.query(
-    `ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS amount numeric(10, 2);`
+    `ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS amount numeric(10, 2);`,
   );
   await pool.query(
-    `ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS reason text;`
+    `ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS reason text;`,
   );
   await pool.query(
-    `ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS created_at timestamp;`
+    `ALTER TABLE credit_notes ADD COLUMN IF NOT EXISTS created_at timestamp;`,
+  );
+}
+
+async function ensureUserInvitesColumns(pool: Pool) {
+  // Ensure user_invites has the responded_at column
+  await pool.query(
+    `ALTER TABLE user_invites ADD COLUMN IF NOT EXISTS responded_at timestamp;`,
   );
 }
 
@@ -202,6 +209,7 @@ beforeAll(async () => {
   await ensureProductsQrCodeUniquenessPerTenant(testDb);
   await ensureBillsColumns(testDb);
   await ensureCreditNotesTable(testDb);
+  await ensureUserInvitesColumns(testDb);
 });
 
 afterAll(async () => {

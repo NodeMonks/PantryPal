@@ -3,6 +3,7 @@ import { db } from "../db";
 import { organizations } from "../../shared/schema";
 import { eq } from "drizzle-orm";
 import { getPlanLimits } from "../utils/planLimits";
+import { requireOrgId } from "./tenantContext";
 
 /**
  * Middleware to ensure the organization has an active subscription
@@ -14,14 +15,9 @@ export async function requireActiveSubscription(
   next: NextFunction,
 ) {
   try {
-    const orgId = req.ctx?.orgId;
-    if (!orgId) {
-      return res.status(401).json({
-        error: "Organization context required",
-        message: "Please log in with your organization account",
-      });
-    }
-
+    // Get orgId from tenant context (handles authentication check internally)
+    const orgId = requireOrgId(req);
+    
     const [org] = await db
       .select()
       .from(organizations)
