@@ -26,6 +26,9 @@ import BarcodeScannerPhysical from "./pages/BarcodeScannerPhysical";
 import Subscription from "./pages/Subscription";
 import Checkout from "./pages/Checkout";
 import OrderConfirmation from "./pages/OrderConfirmation";
+import QuickPOS from "./pages/QuickPOS";
+import POSDashboard from "./pages/POSDashboard";
+import ReturnsRefunds from "./pages/ReturnsRefunds";
 
 const queryClient = new QueryClient();
 
@@ -140,6 +143,32 @@ const App = () => (
               }
             />
 
+            {/* Quick POS - Fast single-screen checkout */}
+            <Route
+              path="/quick-pos"
+              element={
+                <ProtectedRoute
+                  roles={["admin", "store_manager", "inventory_manager"]}
+                >
+                  <QuickPOS />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* POS Dashboard - Real-time metrics */}
+            <Route
+              path="/pos-dashboard"
+              element={
+                <ProtectedRoute
+                  roles={["admin", "store_manager", "inventory_manager"]}
+                >
+                  <DashboardLayout>
+                    <POSDashboard />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+
             <Route
               path="/order-confirmation/:billId"
               element={
@@ -173,6 +202,17 @@ const App = () => (
                 <ProtectedRoute>
                   <DashboardLayout>
                     <Reports />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/returns"
+              element={
+                <ProtectedRoute roles={["admin", "store_manager"]}>
+                  <DashboardLayout>
+                    <ReturnsRefunds />
                   </DashboardLayout>
                 </ProtectedRoute>
               }

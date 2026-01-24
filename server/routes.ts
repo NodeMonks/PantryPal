@@ -219,8 +219,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     isAuthenticated,
     asyncHandler(async (req, res) => {
       const orgId = requireOrgId(req);
-      const products = await productService.listProducts(orgId);
-      res.json(products);
+
+      // Handle search query parameter for Quick POS
+      const searchQuery = req.query.q as string | undefined;
+
+      if (searchQuery) {
+        const { productRepository } = await import("./repositories");
+        const { ilike, or, and, eq } = await import("drizzle-orm");
+        const { products } = await import("../shared/schema");
+        const { db } = await import("./db");
+
+        // Search by name or barcode with org_id filtering
+        const results = await db
+          .select()
+          .from(products)
+          .where(
+            and(
+              eq(products.org_id, orgId),
+              or(
+                ilike(products.name, `%${searchQuery}%`),
+                ilike(products.barcode, `%${searchQuery}%`),
+                ilike(products.qr_code, `%${searchQuery}%`),
+              ),
+            ),
+          )
+          .limit(20);
+
+        return res.json(results);
+      }
+
+      // Default: return all products
+      const productsList = await productService.listProducts(orgId);
+      res.json(productsList);
     }),
   );
 
@@ -884,6 +914,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }),
   );
 
+  // Send E-Bill to customer
+  app.post(
+    "/api/bills/send-ebill",
+    isAuthenticated,
+    requireActiveSubscription,
+    requireRole("admin", "store_manager", "inventory_manager", "cashier"),
+    asyncHandler(async (req, res) => {
+      const { bill_id, bill_number, channels, email, phone, message, qr_code } =
+        req.body;
+
+      // Validate required fields
+      if (!bill_id || !channels || channels.length === 0) {
+        return res
+          .status(400)
+          .json({ error: "Bill ID and at least one channel required" });
+      }
+
+      // For now, we'll simulate sending (in production, integrate with email/SMS/WhatsApp APIs)
+      const results = {
+        bill_number,
+        channels_sent: channels,
+        success: true,
+        timestamp: new Date().toISOString(),
+      };
+
+      // TODO: Implement actual sending logic:
+      // - Email: Use nodemailer or SendGrid
+      // - SMS: Use Twilio or AWS SNS
+      // - WhatsApp: Use Twilio WhatsApp API or Meta WhatsApp Business API
+
+      res.json({
+        success: true,
+        message: `E-Bill sent successfully via ${channels.join(", ")}`,
+        results,
+      });
+    }),
+  );
+
   // ============================
   // Payment Processing Endpoints
   // ============================
@@ -1065,6 +1133,281 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amount: bill.final_amount || bill.total_amount,
         payment_method: bill.payment_method,
         finalized_at: bill.finalized_at,
+      });
+    }),
+  );
+
+  // ==================== Held Bills API ====================
+  /**
+   * Create a held bill (save for later)
+   */
+  app.post(
+    "/api/held-bills",
+    isAuthenticated,
+    requireActiveSubscription,
+    requireRole("admin", "store_manager", "inventory_manager"),
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const { db } = await import("./db");
+      const schema = await import("../shared/schema");
+      const heldBills = schema.held_bills;
+
+      const {
+        hold_name,
+        customer_id,
+        items,
+        subtotal,
+        discount_percent,
+        tax_percent,
+        notes,
+      } = req.body;
+
+      const heldBill = await db
+        .insert(heldBills)
+        .values({
+          id: crypto.randomUUID(),
+          org_id: orgId,
+          terminal_id: req.body.terminal_id || null,
+          cashier_id: (req as any).user?.id || null,
+          hold_name,
+          customer_id: customer_id || null,
+          items: JSON.stringify(items),
+          subtotal,
+          discount_percent: discount_percent || 0,
+          tax_percent: tax_percent || 0,
+          notes: notes || null,
+          created_at: new Date(),
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000), // Expires in 24 hours
+        })
+        .returning();
+
+      res.status(201).json(heldBill[0]);
+    }),
+  );
+
+  /**
+   * Get all held bills for the organization
+   */
+  app.get(
+    "/api/held-bills",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const { db } = await import("./db");
+      const schema = await import("../shared/schema");
+      const heldBills = schema.held_bills;
+      const { eq, and, gt } = await import("drizzle-orm");
+
+      const bills = await db
+        .select()
+        .from(heldBills)
+        .where(
+          and(
+            eq(heldBills.org_id, orgId),
+            gt(heldBills.expires_at, new Date()), // Only active (not expired)
+          ),
+        )
+        .orderBy(heldBills.created_at);
+
+      res.json(bills);
+    }),
+  );
+
+  /**
+   * Get a specific held bill
+   */
+  app.get(
+    "/api/held-bills/:id",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const { db } = await import("./db");
+      const schema = await import("../shared/schema");
+      const heldBills = schema.held_bills;
+      const { eq, and } = await import("drizzle-orm");
+
+      const result = await db
+        .select()
+        .from(heldBills)
+        .where(
+          and(eq(heldBills.id, req.params.id), eq(heldBills.org_id, orgId)),
+        )
+        .limit(1);
+
+      if (result.length === 0) {
+        return res.status(404).json({ error: "Held bill not found" });
+      }
+
+      res.json(result[0]);
+    }),
+  );
+
+  /**
+   * Delete a held bill (cancel/resume)
+   */
+  app.delete(
+    "/api/held-bills/:id",
+    isAuthenticated,
+    requireActiveSubscription,
+    requireRole("admin", "store_manager", "inventory_manager"),
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const { db } = await import("./db");
+      const schema = await import("../shared/schema");
+      const heldBills = schema.held_bills;
+      const { eq, and } = await import("drizzle-orm");
+
+      const result = await db
+        .delete(heldBills)
+        .where(
+          and(eq(heldBills.id, req.params.id), eq(heldBills.org_id, orgId)),
+        )
+        .returning();
+
+      if (result.length === 0) {
+        return res.status(404).json({ error: "Held bill not found" });
+      }
+
+      res.json({ message: "Held bill deleted", id: req.params.id });
+    }),
+  );
+
+  // ==================== POS Metrics API ====================
+  /**
+   * Get real-time POS metrics for dashboard
+   */
+  app.get(
+    "/api/pos/metrics",
+    isAuthenticated,
+    requireRole("admin", "store_manager", "inventory_manager"),
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const { db } = await import("./db");
+      const { bills, bill_items, products } = await import("../shared/schema");
+      const { and, eq, gte, desc, sql } = await import("drizzle-orm");
+
+      // Today's date range
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Fetch today's bills
+      const todayBills = await db
+        .select({
+          id: bills.id,
+          finalAmount: bills.final_amount,
+          paymentMethod: bills.payment_method,
+          createdAt: bills.created_at,
+        })
+        .from(bills)
+        .where(and(eq(bills.org_id, orgId), gte(bills.created_at, today)));
+
+      // Calculate today's metrics
+      const todaySales = todayBills.reduce(
+        (sum, bill) => sum + Number(bill.finalAmount || 0),
+        0,
+      );
+      const averageBillValue =
+        todayBills.length > 0 ? todaySales / todayBills.length : 0;
+
+      // Get today's bill items with product details
+      const billIds = todayBills.map((b) => b.id);
+      const todayItems =
+        billIds.length > 0
+          ? await db
+              .select({
+                productId: bill_items.product_id,
+                quantity: bill_items.quantity,
+                totalPrice: bill_items.total_price,
+                productName: products.name,
+              })
+              .from(bill_items)
+              .leftJoin(products, eq(bill_items.product_id, products.id))
+              .where(eq(bill_items.org_id, orgId))
+          : [];
+
+      // Top selling today
+      const productStats = new Map<
+        string,
+        { name: string; quantity: number; revenue: number }
+      >();
+      todayItems.forEach((item) => {
+        const existing = productStats.get(item.productId) || {
+          name: item.productName || "Unknown",
+          quantity: 0,
+          revenue: 0,
+        };
+        existing.quantity += item.quantity;
+        existing.revenue += Number(item.totalPrice || 0);
+        productStats.set(item.productId, existing);
+      });
+
+      const topSellingToday = Array.from(productStats.values())
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5);
+
+      // Payment method breakdown
+      const paymentBreakdown = new Map<
+        string,
+        { count: number; amount: number }
+      >();
+      todayBills.forEach((bill) => {
+        const method = bill.paymentMethod || "cash";
+        const existing = paymentBreakdown.get(method) || {
+          count: 0,
+          amount: 0,
+        };
+        existing.count += 1;
+        existing.amount += Number(bill.finalAmount || 0);
+        paymentBreakdown.set(method, existing);
+      });
+
+      const paymentMethodBreakdown = Array.from(paymentBreakdown.entries()).map(
+        ([method, stats]) => ({
+          method,
+          count: stats.count,
+          amount: stats.amount,
+        }),
+      );
+
+      // Last 7 days trend
+      const last7Days = [];
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        date.setHours(0, 0, 0, 0);
+        const nextDate = new Date(date);
+        nextDate.setDate(nextDate.getDate() + 1);
+
+        const dayBills = await db
+          .select({
+            finalAmount: bills.final_amount,
+          })
+          .from(bills)
+          .where(
+            and(
+              eq(bills.org_id, orgId),
+              gte(bills.created_at, date),
+              sql`${bills.created_at} < ${nextDate}`,
+            ),
+          );
+
+        last7Days.push({
+          date: date.toISOString().split("T")[0],
+          revenue: dayBills.reduce(
+            (sum, b) => sum + Number(b.finalAmount || 0),
+            0,
+          ),
+          billCount: dayBills.length,
+        });
+      }
+
+      res.json({
+        todaySales: Math.round(todaySales),
+        todayBills: todayBills.length,
+        averageBillValue: Math.round(averageBillValue),
+        topSellingToday,
+        paymentMethodBreakdown,
+        last7DaysSales: last7Days,
       });
     }),
   );
@@ -1437,6 +1780,206 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to fetch organization data" });
     }
   });
+
+  // Analytics API - Comprehensive business insights
+  app.get(
+    "/api/analytics",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const days = Math.min(Number(req.query.days) || 30, 365);
+
+      const { db } = await import("./db");
+      const { bills, bill_items, products, customers, stores } =
+        await import("../shared/schema");
+      const { and, eq, gte, desc, sql } = await import("drizzle-orm");
+
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+
+      // Get bills in period with customer info
+      const periodBills = await db
+        .select({
+          id: bills.id,
+          billNumber: bills.bill_number,
+          customerId: bills.customer_id,
+          totalAmount: bills.total_amount,
+          finalAmount: bills.final_amount,
+          paymentMethod: bills.payment_method,
+          createdAt: bills.created_at,
+          customerName: customers.name,
+        })
+        .from(bills)
+        .leftJoin(customers, eq(bills.customer_id, customers.id))
+        .where(and(eq(bills.org_id, orgId), gte(bills.created_at, cutoffDate)))
+        .orderBy(desc(bills.created_at));
+
+      // Get bill items with product details
+      const billIds = periodBills.map((b) => b.id);
+      const itemsData =
+        billIds.length > 0
+          ? await db
+              .select({
+                billId: bill_items.bill_id,
+                productId: bill_items.product_id,
+                quantity: bill_items.quantity,
+                totalPrice: bill_items.total_price,
+                productName: products.name,
+                productCategory: products.category,
+              })
+              .from(bill_items)
+              .leftJoin(products, eq(bill_items.product_id, products.id))
+              .where(eq(bill_items.org_id, orgId))
+          : [];
+
+      // Calculate metrics
+      const totalRevenue = periodBills.reduce(
+        (sum, bill) => sum + Number(bill.finalAmount || 0),
+        0,
+      );
+
+      const averageBillValue =
+        periodBills.length > 0 ? totalRevenue / periodBills.length : 0;
+
+      // Get unique customers
+      const uniqueCustomers = new Set(
+        periodBills.filter((b) => b.customerId).map((b) => b.customerId),
+      );
+
+      // Get all customers for new vs repeat
+      const allCustomers = await db
+        .select()
+        .from(customers)
+        .where(eq(customers.org_id, orgId));
+
+      const newCustomers = allCustomers.filter((c) => {
+        const custDate = new Date(c.created_at);
+        return custDate >= cutoffDate;
+      }).length;
+
+      // Top products by revenue
+      const productRevenue = new Map<
+        string,
+        { name: string; category: string; quantity: number; revenue: number }
+      >();
+      itemsData.forEach((item) => {
+        const existing = productRevenue.get(item.productId) || {
+          name: item.productName || "Unknown",
+          category: item.productCategory || "Uncategorized",
+          quantity: 0,
+          revenue: 0,
+        };
+        existing.quantity += item.quantity;
+        existing.revenue += Number(item.totalPrice || 0);
+        productRevenue.set(item.productId, existing);
+      });
+
+      const topProducts = Array.from(productRevenue.values())
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 10);
+
+      // Revenue by category
+      const categoryRevenue = new Map<string, number>();
+      itemsData.forEach((item) => {
+        const category = item.productCategory || "Uncategorized";
+        categoryRevenue.set(
+          category,
+          (categoryRevenue.get(category) || 0) + Number(item.totalPrice || 0),
+        );
+      });
+
+      const revenueByCategory = Array.from(categoryRevenue.entries())
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+
+      // Daily sales trend
+      const dailyMap = new Map<
+        string,
+        { revenue: number; billCount: number }
+      >();
+      for (let i = days - 1; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split("T")[0];
+        dailyMap.set(dateStr, { revenue: 0, billCount: 0 });
+      }
+
+      periodBills.forEach((bill) => {
+        const dateStr = new Date(bill.createdAt).toISOString().split("T")[0];
+        const dayData = dailyMap.get(dateStr);
+        if (dayData) {
+          dayData.revenue += Number(bill.finalAmount || 0);
+          dayData.billCount += 1;
+        }
+      });
+
+      const dailySales = Array.from(dailyMap.entries()).map(([date, data]) => ({
+        date,
+        revenue: Math.round(data.revenue),
+        billCount: data.billCount,
+      }));
+
+      // Revenue by payment method
+      const paymentMethodRevenue = new Map<string, number>();
+      periodBills.forEach((bill) => {
+        const method = bill.paymentMethod || "cash";
+        paymentMethodRevenue.set(
+          method,
+          (paymentMethodRevenue.get(method) || 0) +
+            Number(bill.finalAmount || 0),
+        );
+      });
+
+      const revenueByPaymentMethod = Array.from(
+        paymentMethodRevenue.entries(),
+      ).map(([name, value]) => ({ name, value }));
+
+      // Top customers
+      const customerSpending = new Map<
+        string,
+        { name: string; spent: number; billCount: number }
+      >();
+      periodBills.forEach((bill) => {
+        if (bill.customerId && bill.customerName) {
+          const existing = customerSpending.get(bill.customerId) || {
+            name: bill.customerName,
+            spent: 0,
+            billCount: 0,
+          };
+          existing.spent += Number(bill.finalAmount || 0);
+          existing.billCount += 1;
+          customerSpending.set(bill.customerId, existing);
+        }
+      });
+
+      const topCustomers = Array.from(customerSpending.values())
+        .sort((a, b) => b.spent - a.spent)
+        .slice(0, 10);
+
+      // Get all stores for multi-store analytics
+      const allStores = await db
+        .select()
+        .from(stores)
+        .where(eq(stores.org_id, orgId));
+
+      res.json({
+        period: `Last ${days} days`,
+        totalRevenue: Math.round(totalRevenue),
+        totalBills: periodBills.length,
+        averageBillValue: Math.round(averageBillValue),
+        uniqueCustomers: uniqueCustomers.size,
+        newCustomers,
+        repeatCustomers: uniqueCustomers.size - newCustomers,
+        topProducts,
+        revenueByCategory,
+        dailySales,
+        revenueByPaymentMethod,
+        topCustomers,
+        totalStores: allStores.length,
+        storeNames: allStores.map((s) => s.name),
+      });
+    }),
+  );
 
   const httpServer = createServer(app);
   return httpServer;

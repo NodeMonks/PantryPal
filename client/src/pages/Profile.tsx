@@ -115,15 +115,17 @@ export default function Profile() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      {" "}
+      {/* Header with Avatar */}
       <div className="flex items-center gap-4">
-        <div className="h-20 w-20 rounded-2xl bg-orange-600 flex items-center justify-center text-white shadow-lg">
-          <User className="h-10 w-10" />
+        <div className="h-24 w-24 rounded-2xl bg-gradient-to-br from-orange-600 to-orange-500 flex items-center justify-center text-white shadow-xl">
+          <User className="h-12 w-12" />
         </div>
         <div>
-          <h1 className="text-3xl font-bold">Profile</h1>
-          <p className="text-sm text-muted-foreground">
-            Your account details & session info
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-600 to-orange-500 bg-clip-text text-transparent">
+            Profile
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Manage your account, organization & store details
           </p>
         </div>
       </div>
@@ -220,7 +222,7 @@ export default function Profile() {
                   </label>
                   <div className="px-3 py-2 rounded-md border bg-background text-xs">
                     {new Date(
-                      orgData.organization.createdAt
+                      orgData.organization.createdAt,
                     ).toLocaleDateString()}
                   </div>
                 </div>
@@ -308,7 +310,7 @@ export default function Profile() {
                 </label>
                 <div className="px-3 py-2 rounded-md border bg-background text-xs">
                   {new Date(
-                    orgData.currentStore.createdAt
+                    orgData.currentStore.createdAt,
                   ).toLocaleDateString()}
                 </div>
               </div>
@@ -397,40 +399,53 @@ export default function Profile() {
                   <Zap className="h-3 w-3" />
                   Current Plan
                 </label>
-                <div className="px-4 py-3 rounded-lg border-2 border-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/20">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-emerald-700 dark:text-emerald-200 capitalize">
-                      {orgData.organization.planName || "Free Trial"}
-                    </span>
-                    <Crown className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                  </div>
+                <div className="px-4 py-3 rounded-lg border-2 border-emerald-500 bg-gradient-to-br from-emerald-50 to-green-50/50">
+                  <p className="text-lg font-bold text-emerald-700 capitalize">
+                    {orgData.organization.planName || "Free"}
+                  </p>
+                  <p className="text-xs text-emerald-600">
+                    Active subscription
+                  </p>
                 </div>
               </div>
 
               {/* Payment Status */}
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                  <Zap className="h-3 w-3" />
+                <label className="text-xs font-medium text-muted-foreground">
                   Payment Status
                 </label>
-                <div className="px-4 py-3 rounded-lg border bg-background dark:bg-gray-900/50">
-                  <div className="flex items-center gap-2">
-                    {orgData.organization.paymentStatus === "active" ? (
-                      <>
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
-                        <span className="font-medium text-sm capitalize">
-                          {orgData.organization.paymentStatus}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <AlertCircle className="h-4 w-4 text-yellow-600" />
-                        <span className="font-medium text-sm capitalize">
-                          {orgData.organization.paymentStatus || "pending"}
-                        </span>
-                      </>
-                    )}
-                  </div>
+                <div className="px-4 py-3 rounded-lg border bg-background">
+                  {orgData.organization.paymentStatus === "active" ? (
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      <div>
+                        <p className="font-semibold text-green-600">Active</p>
+                        <p className="text-xs text-muted-foreground">
+                          All paid up
+                        </p>
+                      </div>
+                    </div>
+                  ) : orgData.organization.paymentStatus === "pending" ? (
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-5 w-5 text-amber-600" />
+                      <div>
+                        <p className="font-semibold text-amber-600">Pending</p>
+                        <p className="text-xs text-muted-foreground">
+                          Payment pending
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <XCircle className="h-5 w-5 text-red-600" />
+                      <div>
+                        <p className="font-semibold text-red-600">Inactive</p>
+                        <p className="text-xs text-muted-foreground">
+                          Renew subscription
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -438,33 +453,42 @@ export default function Profile() {
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                   <FileCheck className="h-3 w-3" />
-                  Verification
+                  KYC Verification
                 </label>
-                <div className="px-4 py-3 rounded-lg border bg-background dark:bg-gray-900/50">
-                  <div className="flex items-center gap-2">
-                    {orgData.organization.kycStatus === "verified" ? (
-                      <>
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
-                        <span className="font-medium text-sm capitalize text-green-700">
-                          Verified
-                        </span>
-                      </>
-                    ) : orgData.organization.kycStatus === "rejected" ? (
-                      <>
-                        <XCircle className="h-4 w-4 text-red-600" />
-                        <span className="font-medium text-sm text-red-700">
-                          Rejected
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <AlertCircle className="h-4 w-4 text-yellow-600" />
-                        <span className="font-medium text-sm capitalize text-yellow-700">
-                          Pending
-                        </span>
-                      </>
-                    )}
-                  </div>
+                <div className="px-4 py-3 rounded-lg border bg-background">
+                  {orgData.organization.kycStatus === "verified" ? (
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-5 w-5 text-blue-600" />
+                      <div>
+                        <p className="font-semibold text-blue-600">Verified</p>
+                        <p className="text-xs text-muted-foreground">
+                          Documents approved
+                        </p>
+                      </div>
+                    </div>
+                  ) : orgData.organization.kycStatus === "pending" ? (
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-5 w-5 text-amber-600" />
+                      <div>
+                        <p className="font-semibold text-amber-600">Pending</p>
+                        <p className="text-xs text-muted-foreground">
+                          Under review
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <XCircle className="h-5 w-5 text-gray-600" />
+                      <div>
+                        <p className="font-semibold text-gray-600">
+                          Not Started
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Submit documents
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

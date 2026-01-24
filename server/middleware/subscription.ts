@@ -17,7 +17,7 @@ export async function requireActiveSubscription(
   try {
     // Get orgId from tenant context (handles authentication check internally)
     const orgId = requireOrgId(req);
-    
+
     const [org] = await db
       .select()
       .from(organizations)

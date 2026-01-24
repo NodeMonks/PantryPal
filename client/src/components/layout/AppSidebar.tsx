@@ -12,6 +12,8 @@ import {
   User as UserIcon,
   ShoppingCart,
   Download,
+  FastForward,
+  RotateCcw,
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -41,12 +43,15 @@ const menuItems = [
   { title: "Barcode Scanner", url: "/barcode-scanner", icon: Barcode },
   { title: "QR Scanner", url: "/qr-scanner", icon: QrCode },
   { title: "Customers", url: "/customers", icon: Users },
+  { title: "Returns", url: "/returns", icon: RotateCcw },
   { title: "Reports", url: "/reports", icon: BarChart3 },
   { title: "Expiry Alerts", url: "/expiry", icon: AlertTriangle },
   { title: "User Management", url: "/users", icon: UserIcon, adminOnly: true },
 ];
 
 const quickActions = [
+  { title: "Quick POS", url: "/quick-pos", icon: FastForward },
+  { title: "POS Dashboard", url: "/pos-dashboard", icon: BarChart3 },
   { title: "New Bill", url: "/billing/new", icon: Receipt },
   { title: "Add Product", url: "/inventory/add", icon: ShoppingBasket },
 ];

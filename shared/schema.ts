@@ -186,7 +186,7 @@ export const organizationRegistrationSchema = z.object({
           .string()
           .min(2, "Store name must be at least 2 characters")
           .max(100, "Store name must be at most 100 characters"),
-      })
+      }),
     )
     .min(1, "At least one store is required")
     .max(10, "Maximum of 10 stores allowed"),
@@ -197,7 +197,7 @@ export const organizationRegistrationSchema = z.object({
         .string()
         .regex(
           /^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}$/,
-          "Invalid GST number format (15 alphanumeric)"
+          "Invalid GST number format (15 alphanumeric)",
         )
         .optional()
         .or(z.literal("")),
@@ -274,7 +274,7 @@ export const insertCreditNoteSchema = createInsertSchema(credit_notes).omit({
   org_id: true,
 });
 export const insertInventoryTransactionSchema = createInsertSchema(
-  inventory_transactions
+  inventory_transactions,
 ).omit({
   id: true,
   created_at: true,
@@ -387,9 +387,9 @@ export const user_roles = pgTable(
     unique_user_org_role: unique().on(
       table.user_id,
       table.org_id,
-      table.role_id
+      table.role_id,
     ),
-  })
+  }),
 );
 
 export const sessions = pgTable("sessions", {
@@ -487,6 +487,108 @@ export const onboardingTokenCreateSchema = z.object({
   expires_in_hours: z.number().int().min(1).max(168).default(72), // 3 days default
 });
 
+// POS Terminals for multi-terminal support
+export const pos_terminals = pgTable("pos_terminals", {
+  id: uuid("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  store_id: uuid("store_id")
+    .notNull()
+    .references(() => stores.id, { onDelete: "cascade" }),
+  org_id: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  terminal_number: text("terminal_number").notNull(), // e.g., "POS-01"
+  terminal_name: text("terminal_name").notNull(), // e.g., "Counter 1"
+  is_active: boolean("is_active").notNull().default(true),
+  last_used_at: timestamp("last_used_at"),
+  created_at: timestamp("created_at").notNull().defaultNow(),
+});
+
+// POS Shifts for cashier tracking
+export const pos_shifts = pgTable("pos_shifts", {
+  id: uuid("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  terminal_id: uuid("terminal_id")
+    .notNull()
+    .references(() => pos_terminals.id, { onDelete: "cascade" }),
+  org_id: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  cashier_id: integer("cashier_id").references(() => users.id),
+  shift_start: timestamp("shift_start").notNull().defaultNow(),
+  shift_end: timestamp("shift_end"),
+  opening_cash: decimal("opening_cash", { precision: 10, scale: 2 }).default(
+    "0",
+  ),
+  closing_cash: decimal("closing_cash", { precision: 10, scale: 2 }),
+  expected_cash: decimal("expected_cash", { precision: 10, scale: 2 }),
+  cash_variance: decimal("cash_variance", { precision: 10, scale: 2 }),
+  total_sales: decimal("total_sales", { precision: 10, scale: 2 }).default("0"),
+  total_bills: integer("total_bills").default(0),
+  notes: text("notes"),
+  created_at: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Held Bills for save-for-later functionality
+export const held_bills = pgTable("held_bills", {
+  id: uuid("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  org_id: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  terminal_id: uuid("terminal_id").references(() => pos_terminals.id),
+  cashier_id: integer("cashier_id").references(() => users.id),
+  hold_name: text("hold_name").notNull(), // e.g., "Table 5", "Customer John"
+  customer_id: uuid("customer_id").references(() => customers.id),
+  items: text("items").notNull(), // JSON stringified cart items
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
+  discount_percent: decimal("discount_percent", {
+    precision: 5,
+    scale: 2,
+  }).default("0"),
+  tax_percent: decimal("tax_percent", { precision: 5, scale: 2 }).default("0"),
+  notes: text("notes"),
+  created_at: timestamp("created_at").notNull().defaultNow(),
+  expires_at: timestamp("expires_at"), // Auto-delete after X hours
+});
+
+// Split Payments for multi-payment method bills
+export const split_payments = pgTable("split_payments", {
+  id: uuid("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  bill_id: uuid("bill_id")
+    .notNull()
+    .references(() => bills.id, { onDelete: "cascade" }),
+  org_id: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  payment_method: text("payment_method").notNull(), // cash, card, upi, razorpay
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  transaction_id: text("transaction_id"), // For card/UPI/razorpay
+  created_at: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Offline Queue for bills created while offline
+export const offline_queue = pgTable("offline_queue", {
+  id: uuid("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  org_id: uuid("org_id")
+    .notNull()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  local_id: text("local_id").notNull(), // Client-generated ID
+  bill_data: text("bill_data").notNull(), // JSON stringified bill
+  status: text("status").notNull().default("pending"), // pending, synced, failed
+  attempts: integer("attempts").default(0),
+  error_message: text("error_message"),
+  created_at: timestamp("created_at").notNull().defaultNow(),
+  synced_at: timestamp("synced_at"),
+});
+
 export type Organization = typeof organizations.$inferSelect;
 export type Store = typeof stores.$inferSelect;
 export type Role = typeof roles.$inferSelect;
@@ -495,3 +597,8 @@ export type UserRoleAssignment = typeof user_roles.$inferSelect;
 export type Session = typeof sessions.$inferSelect;
 export type AuditLog = typeof audit_logs.$inferSelect;
 export type UserInvite = typeof user_invites.$inferSelect;
+export type POSTerminal = typeof pos_terminals.$inferSelect;
+export type POSShift = typeof pos_shifts.$inferSelect;
+export type HeldBill = typeof held_bills.$inferSelect;
+export type SplitPayment = typeof split_payments.$inferSelect;
+export type OfflineQueueItem = typeof offline_queue.$inferSelect;

@@ -11,7 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowRight, CreditCard, Check, Loader2 } from "lucide-react";
+import {
+  ArrowRight,
+  CreditCard,
+  Check,
+  Loader2,
+  ArrowLeft,
+} from "lucide-react";
 
 // Declare Razorpay globally
 declare global {
@@ -259,6 +265,18 @@ export default function Subscription() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-muted/40 py-10 px-4">
       <div className="mx-auto w-full max-w-5xl space-y-8">
+        {" "}
+        {/* Back to Login Button */}
+        <div>
+          <Button
+            variant="ghost"
+            onClick={() => navigate("/login")}
+            className="gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Login
+          </Button>
+        </div>
         <div className="text-center space-y-2">
           <h1 className="text-3xl md:text-4xl font-bold text-foreground">
             Subscribe to PantryPal
@@ -271,7 +289,6 @@ export default function Subscription() {
             organization registration.
           </p>
         </div>
-
         {/* Plans Grid */}
         <div className="grid gap-6 md:grid-cols-2">
           {plans.map((plan) => (
@@ -378,7 +395,6 @@ export default function Subscription() {
             </Card>
           ))}
         </div>
-
         {/* Customer Data Collection Form */}
         {!showCustomerForm && (
           <Card className="border-orange-200 bg-orange-50/50 dark:bg-orange-900/10">
@@ -402,7 +418,6 @@ export default function Subscription() {
             </CardContent>
           </Card>
         )}
-
         {showCustomerForm && (
           <Card>
             <CardHeader>
@@ -498,7 +513,6 @@ export default function Subscription() {
             </CardContent>
           </Card>
         )}
-
         {/* CTA Button */}
         <div className="text-center space-y-4">
           {!razorpayReady && !razorpayLoadError && (
