@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { cache, type BillCache, type TenantScope } from "@/lib/indexeddb";
+import { cache } from "@/lib/indexeddb";
 import { api, type Bill } from "@/lib/api";
 
 interface BillState {
@@ -37,24 +37,7 @@ export const useBillStore = create<BillState>()(
       loadBills: async (orgId: string) => {
         set({ loading: true, currentOrgId: orgId });
         try {
-          // Try to load from IndexedDB first
-          const cached = await cache.getBills({ orgId, storeId: orgId });
-          if (cached.length > 0) {
-            const bills: Bill[] = cached.map((c: BillCache) => ({
-              id: c.id,
-              bill_number: "",
-              customer_id: null,
-              total_amount: "0",
-              discount_amount: null,
-              tax_amount: null,
-              final_amount: c.total.toString(),
-              payment_method: null,
-              created_at: new Date(c.createdAt).toISOString(),
-            }));
-            set({ bills, loading: false, error: null });
-          }
-
-          // Fetch from server
+          // Always fetch from server for accurate data; IndexedDB is for offline queue only.
           const response = await api.getBills(orgId);
           set({
             bills: response,
@@ -109,7 +92,7 @@ export const useBillStore = create<BillState>()(
       updateBill: (billId: string, updates: Partial<Bill>) => {
         const state = get();
         const updated = state.bills.map((b) =>
-          b.id === billId ? { ...b, ...updates } : b
+          b.id === billId ? { ...b, ...updates } : b,
         );
         set({ bills: updated });
       },
@@ -126,7 +109,7 @@ export const useBillStore = create<BillState>()(
         return state.bills.filter(
           (b) =>
             b.bill_number.toLowerCase().includes(lower) ||
-            b.id.toLowerCase().includes(lower)
+            b.id.toLowerCase().includes(lower),
         );
       },
 
@@ -194,6 +177,6 @@ export const useBillStore = create<BillState>()(
     {
       name: "bill-store",
       version: 1,
-    }
-  )
+    },
+  ),
 );

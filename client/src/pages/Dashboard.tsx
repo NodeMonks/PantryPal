@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Card,
@@ -13,8 +13,6 @@ import { Button } from "@/components/ui/button";
 import {
   LineChart,
   Line,
-  BarChart,
-  Bar,
   PieChart,
   Pie,
   Cell,
@@ -22,14 +20,10 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from "recharts";
-import { useProductStore } from "@/stores/productStore";
-import { useCustomerStore } from "@/stores/customerStore";
-import { useBillStore } from "@/stores/billStore";
-import { useInventoryStore } from "@/stores/inventoryStore";
 import { useAuth } from "@/contexts/AuthContext";
+import { api, type Product, type Bill, type Customer } from "@/lib/api";
 import { Link } from "react-router-dom";
 import {
   Package,
@@ -40,123 +34,132 @@ import {
   Users,
   Clock,
   CheckCircle,
-  AlertCircle,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Dashboard() {
   const { t } = useTranslation();
-  const { user } = useAuth();
-  const productStore = useProductStore();
-  const customerStore = useCustomerStore();
-  const billStore = useBillStore();
-  const inventoryStore = useInventoryStore();
+  const { user, loading: authLoading } = useAuth();
+  const { toast } = useToast();
 
-  const [salesData, setSalesData] = useState<any[]>([]);
-  const [categoryData, setCategoryData] = useState<any[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [bills, setBills] = useState<Bill[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // Load all store data
+  // Load all data directly — same pattern as Inventory
   useEffect(() => {
-    if (user?.org_id) {
-      productStore.loadProducts(user.org_id);
-      customerStore.loadCustomers(user.org_id);
-      billStore.loadBills(user.org_id);
-      inventoryStore.loadInventoryAlerts(user.org_id);
-    }
-  }, [user?.org_id]);
+    // Wait for auth to finish resolving before deciding what to do
+    if (authLoading) return;
+    // Don't fetch if not authenticated
+    if (!user) return;
 
-  // Generate sales data for the last 7 days
-  useEffect(() => {
-    const data = [];
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toLocaleDateString("en-IN", {
-        month: "short",
-        day: "numeric",
-      });
+    let cancelled = false;
+    const load = async () => {
+      try {
+        setLoading(true);
+        const [productsData, billsData, customersData] = await Promise.all([
+          api.getProducts(),
+          api.getBills(),
+          api.getCustomers(),
+        ]);
+        if (!cancelled) {
+          setProducts(productsData);
+          setBills(billsData);
+          setCustomers(customersData);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Dashboard load error:", err);
+          toast({
+            title: t("common.error"),
+            description: "Failed to load dashboard data.",
+            variant: "destructive",
+          });
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
 
-      const dayBills = billStore.bills.filter((bill) => {
-        const billDate = new Date(bill.created_at).toDateString();
-        return billDate === date.toDateString();
-      });
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, authLoading]);
 
-      const revenue = dayBills.reduce(
-        (sum, bill) => sum + Number(bill.final_amount),
-        0,
-      );
+  // Derived stats
+  const totalProducts = products.length;
 
-      data.push({
-        date: dateStr,
-        revenue: Math.round(revenue),
-        count: dayBills.length,
-      });
-    }
-    setSalesData(data);
-  }, [billStore.bills]);
+  const lowStockProducts = useMemo(
+    () =>
+      products.filter(
+        (p) => (p.quantity_in_stock ?? 0) <= (p.min_stock_level ?? 0),
+      ),
+    [products],
+  );
+  const lowStockCount = lowStockProducts.length;
 
-  // Generate category distribution
-  useEffect(() => {
-    const categoryMap = new Map<string, number>();
-    productStore.products.forEach((product) => {
-      const count = categoryMap.get(product.category) || 0;
-      categoryMap.set(product.category, count + 1);
+  const today = new Date().toDateString();
+  const todayBills = useMemo(
+    () => bills.filter((b) => new Date(b.created_at).toDateString() === today),
+    [bills],
+  );
+  const todaySalesRevenue = useMemo(
+    () => todayBills.reduce((sum, b) => sum + Number(b.final_amount), 0),
+    [todayBills],
+  );
+  const totalRevenue = useMemo(
+    () => bills.reduce((sum, b) => sum + Number(b.final_amount), 0),
+    [bills],
+  );
+  const totalCustomers = customers.length;
+
+  // Expiring within 7 days
+  const expiringProducts = useMemo(() => {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() + 7);
+    const todayMs = new Date().setHours(0, 0, 0, 0);
+    return products.filter((p) => {
+      if (!p.expiry_date) return false;
+      const exp = new Date(p.expiry_date).getTime();
+      return exp >= todayMs && exp <= cutoff.getTime();
     });
+  }, [products]);
 
-    const data = Array.from(categoryMap).map(([category, count]) => ({
-      name: category,
-      value: count,
-    }));
-    setCategoryData(data);
-  }, [productStore.products]);
+  // 7-day sales trend
+  const salesData = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - i));
+      const dayBills = bills.filter(
+        (b) => new Date(b.created_at).toDateString() === date.toDateString(),
+      );
+      return {
+        date: date.toLocaleDateString("en-IN", {
+          month: "short",
+          day: "numeric",
+        }),
+        revenue: Math.round(
+          dayBills.reduce((sum, b) => sum + Number(b.final_amount), 0),
+        ),
+        count: dayBills.length,
+      };
+    });
+  }, [bills]);
 
-  // Calculate metrics
-  const totalProducts = productStore.products.length;
-  const lowStockCount = productStore.products.filter(
-    (p) => (p.quantity_in_stock || 0) <= (p.min_stock_level || 0),
-  ).length;
-
-  const todayBills = billStore.bills.filter((bill) => {
-    const billDate = new Date(bill.created_at).toDateString();
-    const today = new Date().toDateString();
-    return billDate === today;
-  });
-
-  const todaySales = todayBills.reduce(
-    (sum, bill) => sum + Number(bill.final_amount),
-    0,
-  );
-
-  const totalRevenue = billStore.bills.reduce(
-    (sum, bill) => sum + Number(bill.final_amount),
-    0,
-  );
-
-  // Collect all batches from products
-  const allBatches = productStore.products.flatMap((product) =>
-    (product.batches || []).map(
-      (batch: NonNullable<typeof product.batches>[number]) => ({
-        ...batch,
-        productName: product.name,
-        productId: product.id,
-      }),
-    ),
-  );
-
-  // Batches expiring soon (within 7 days)
-  const expiringBatches = allBatches.filter((batch) => {
-    if (!batch.expiry_date) return false;
-    const daysUntilExpiry = Math.ceil(
-      (new Date(batch.expiry_date).getTime() - new Date().getTime()) /
-        (1000 * 3600 * 24),
+  // Category distribution
+  const categoryData = useMemo(() => {
+    const map = new Map<string, number>();
+    products.forEach((p) =>
+      map.set(p.category, (map.get(p.category) || 0) + 1),
     );
-    return daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
-  });
-
-  const totalCustomers = customerStore.customers.length;
+    return Array.from(map).map(([name, value]) => ({ name, value }));
+  }, [products]);
 
   const COLORS = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6"];
 
-  if (productStore.loading || customerStore.loading || billStore.loading) {
+  if (authLoading || loading) {
     return (
       <PageLoadingSkeleton
         statCols={5}
@@ -243,7 +246,8 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="relative">
             <div className="text-3xl font-bold text-white">
-              ₹{Math.round(todaySales).toLocaleString()}
+              {String.fromCharCode(8377)}
+              {Math.round(todaySalesRevenue).toLocaleString()}
             </div>
             <p className="text-xs text-emerald-100 mt-1">
               {todayBills.length} {t("dashboard.bills")}
@@ -264,10 +268,11 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="relative">
             <div className="text-3xl font-bold text-white">
-              ₹{Math.round(totalRevenue).toLocaleString()}
+              {String.fromCharCode(8377)}
+              {Math.round(totalRevenue).toLocaleString()}
             </div>
             <p className="text-xs text-violet-200 mt-1">
-              {billStore.bills.length} {t("dashboard.bills")}
+              {bills.length} {t("dashboard.bills")}
             </p>
           </CardContent>
         </Card>
@@ -321,7 +326,7 @@ export default function Dashboard() {
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip
                   formatter={(value) => [
-                    `₹${Number(value).toLocaleString()}`,
+                    `${String.fromCharCode(8377)}${Number(value).toLocaleString()}`,
                     "Revenue",
                   ]}
                   contentStyle={{
@@ -361,35 +366,43 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="pt-4">
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie
-                  data={categoryData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, value }) => `${name}: ${value}`}
-                  outerRadius={90}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {categoryData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={COLORS[index % COLORS.length]}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ borderRadius: "8px", fontSize: 12 }} />
-              </PieChart>
-            </ResponsiveContainer>
+            {categoryData.length === 0 ? (
+              <div className="flex items-center justify-center h-[260px] text-muted-foreground text-sm">
+                No products yet
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie
+                    data={categoryData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, value }) => `${name}: ${value}`}
+                    outerRadius={90}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {categoryData.map((_, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={COLORS[index % COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ borderRadius: "8px", fontSize: 12 }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
       </div>
 
       {/* Alerts and Quick Actions */}
       <div className="grid gap-4 md:grid-cols-2">
-        {/* Expiring Batches */}
+        {/* Expiring Products */}
         <Card className="shadow-sm border border-amber-200 dark:border-amber-800/50">
           <CardHeader className="pb-2 bg-amber-50/50 dark:bg-amber-950/20 rounded-t-xl border-b border-amber-100 dark:border-amber-800/30">
             <CardTitle className="flex items-center gap-2 text-amber-900 dark:text-amber-200">
@@ -403,7 +416,7 @@ export default function Dashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-4">
-            {expiringBatches.length === 0 ? (
+            {expiringProducts.length === 0 ? (
               <div className="flex items-center gap-3 text-sm text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg p-3">
                 <CheckCircle className="h-5 w-5 text-emerald-500" />
                 <span className="font-medium">
@@ -412,51 +425,29 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="space-y-2">
-                {expiringBatches
-                  .sort((a, b) => {
-                    const aTime = a.expiry_date
-                      ? new Date(a.expiry_date).getTime()
-                      : Number.POSITIVE_INFINITY;
-                    const bTime = b.expiry_date
-                      ? new Date(b.expiry_date).getTime()
-                      : Number.POSITIVE_INFINITY;
-                    return aTime - bTime;
-                  })
-                  .slice(0, 5)
-                  .map((batch) => {
-                    const daysLeft = Math.ceil(
-                      (new Date(batch.expiry_date || "").getTime() -
-                        new Date().getTime()) /
-                        (1000 * 3600 * 24),
-                    );
-                    return (
-                      <div
-                        key={
-                          batch.batch_id ||
-                          batch.batch_number ||
-                          `${batch.productId}-${batch.expiry_date || "na"}`
-                        }
-                        className={`flex flex-col md:flex-row justify-between items-start md:items-center text-sm rounded-lg px-3 py-2 border ${daysLeft <= 3 ? "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800/40" : "bg-amber-50/60 border-amber-100 dark:bg-amber-950/10 dark:border-amber-800/30"}`}
+                {expiringProducts.slice(0, 5).map((product) => {
+                  const daysLeft = Math.ceil(
+                    (new Date(product.expiry_date!).getTime() - Date.now()) /
+                      (1000 * 3600 * 24),
+                  );
+                  return (
+                    <div
+                      key={product.id}
+                      className={`flex justify-between items-center text-sm rounded-lg px-3 py-2 border ${daysLeft <= 3 ? "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800/40" : "bg-amber-50/60 border-amber-100 dark:bg-amber-950/10 dark:border-amber-800/30"}`}
+                    >
+                      <span className="font-medium text-foreground">
+                        {product.name}
+                      </span>
+                      <Badge
+                        variant={daysLeft <= 3 ? "destructive" : "secondary"}
+                        className="text-xs font-semibold"
                       >
-                        <span className="font-medium text-foreground">
-                          {batch.productName}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          Batch: {batch.batch_number}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          Shelf: {batch.shelf_location || "N/A"}
-                        </span>
-                        <Badge
-                          variant={daysLeft <= 3 ? "destructive" : "secondary"}
-                          className="text-xs font-semibold"
-                        >
-                          {daysLeft} {t("dashboard.days")}
-                        </Badge>
-                      </div>
-                    );
-                  })}
-                {expiringBatches.length > 5 && (
+                        {daysLeft} {t("dashboard.days")}
+                      </Badge>
+                    </div>
+                  );
+                })}
+                {expiringProducts.length > 5 && (
                   <Button
                     variant="link"
                     size="sm"
@@ -464,7 +455,7 @@ export default function Dashboard() {
                     className="w-full text-amber-700"
                   >
                     <Link to="/inventory">
-                      View all ({expiringBatches.length})
+                      View all ({expiringProducts.length})
                     </Link>
                   </Button>
                 )}
@@ -539,6 +530,16 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            <ul className="text-sm text-orange-800 dark:text-orange-300 mb-3 space-y-1 list-disc list-inside">
+              {lowStockProducts.slice(0, 5).map((p) => (
+                <li key={p.id}>{p.name}</li>
+              ))}
+              {lowStockProducts.length > 5 && (
+                <li className="list-none text-xs text-muted-foreground">
+                  +{lowStockProducts.length - 5} more
+                </li>
+              )}
+            </ul>
             <p className="text-sm text-orange-800 dark:text-orange-300 mb-4">
               {t("dashboard.lowStockDesc")}
             </p>

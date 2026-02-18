@@ -63,6 +63,8 @@ export default {
     info: "ಮಾಹಿತಿ",
     download: "ಡೌನ್‌ಲೋಡ್",
     print: "ಮುದ್ರಿಸಿ",
+    refreshSuccess: "ಡೇಟಾ ರಿಫ್ರೆಶ್ ಆಯಿತು",
+    refreshNoChange: "ಈಗಾಗಲೇ ನವೀಕರಿಸಲಾಗಿದೆ",
   },
 
   dashboard: {
@@ -102,6 +104,9 @@ export default {
     shelf: "ಶೆಲ್ಫ್",
     batch: "ಬ್ಯಾಚ್",
     days: "ದಿನಗಳು",
+    today: "ಇಂದು",
+    allTime: "ಒಟ್ಟು",
+    expiringSoon: "ಶೀಘ್ರ ಅವಧಿ ಮೀರುತ್ತದೆ",
   },
 
   inventory: {
@@ -276,10 +281,6 @@ export default {
     daysLeft: "{{count}} ದಿನಗಳು ಉಳಿದಿವೆ",
   },
 
-  returns: {
-    title: "ವಾಪಸಾತಿಗಳು",
-    subtitle: "ಉತ್ಪನ್ನ ವಾಪಸಾತಿ ಮತ್ತು ಮರುಪಾವತಿ ನಿರ್ವಹಿಸಿ",
-  },
   returns: {
     title: "ರಿಟರ್ನ್ಸ್ & ರಿಫಂಡ್ಗಳು",
     subtitle: "ಉತ್ಪನ್ನ ರಿಟರ್ನ್ ಮತ್ತು ರಿಫಂಡ್ ನಿರ್ವಹಿಸಿ",

@@ -35,11 +35,12 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { RefreshButton } from "@/components/RefreshButton";
 
 /* ─── Active link styles ─────────────────────────────────────────── */
 const navLinkCls = ({ isActive }: { isActive: boolean }) =>
   cn(
-    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 whitespace-nowrap",
+    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-150 whitespace-nowrap",
     isActive
       ? "bg-orange-500/15 text-orange-600 dark:text-orange-400"
       : "text-muted-foreground hover:text-foreground hover:bg-accent",
@@ -151,8 +152,14 @@ export function AppNavbar() {
               end={item.url === "/"}
               className={navLinkCls}
             >
-              <item.icon className="h-3.5 w-3.5 shrink-0" />
-              {t(item.titleKey)}
+              {({ isActive }) => (
+                <>
+                  <item.icon className="h-3.5 w-3.5 shrink-0" />
+                  {isActive && (
+                    <span className="text-sm">{t(item.titleKey)}</span>
+                  )}
+                </>
+              )}
             </NavLink>
           ))}
         </div>
@@ -200,6 +207,9 @@ export function AppNavbar() {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Refresh data */}
+          <RefreshButton showLabel />
 
           {/* Language Switcher */}
           <LanguageSwitcher compact />

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { cache, type ProductCache, type TenantScope } from "@/lib/indexeddb";
+import { cache } from "@/lib/indexeddb";
 import { api, type Product } from "@/lib/api";
 
 interface ProductState {
@@ -33,33 +33,15 @@ export const useProductStore = create<ProductState>()(
       loadProducts: async (orgId: string) => {
         set({ loading: true, currentOrgId: orgId });
         try {
-          // Try to load from IndexedDB first
-          const cached = await cache.getProducts({ orgId, storeId: orgId });
-          if (cached.length > 0) {
-            const products: Product[] = cached.map((c: ProductCache) => ({
-              id: c.id,
-              name: c.name,
-              category: "",
-              brand: null,
-              mrp: "0",
-              buying_cost: "0",
-              quantity_in_stock: 0,
-              min_stock_level: 0,
-              unit: "piece",
-              expiry_date: null,
-              qr_code: c.qr_code || null,
-              created_at: new Date(c.updatedAt).toISOString(),
-              description: null,
-              manufacturing_date: null,
-              updated_at: new Date(c.updatedAt).toISOString(),
-              barcode: c.barcode || null,
-            }));
-            set({ products, loading: false, error: null });
-          }
-
-          // Fetch from server
+          // Always fetch from server first for accurate data; IndexedDB is
+          // only used for offline barcode/QR lookup, not dashboard metrics.
           const response = await api.getProducts(orgId);
-          set({ products: response, loading: false, error: null, lastSync: Date.now() });
+          set({
+            products: response,
+            loading: false,
+            error: null,
+            lastSync: Date.now(),
+          });
 
           // Cache in IndexedDB
           const cached_items = response.map((p: Product) => ({
@@ -86,7 +68,7 @@ export const useProductStore = create<ProductState>()(
       updateProduct: (productId: string, updates: Partial<Product>) => {
         const state = get();
         const updated = state.products.map((p) =>
-          p.id === productId ? { ...p, ...updates } : p
+          p.id === productId ? { ...p, ...updates } : p,
         );
         set({ products: updated });
       },
@@ -104,7 +86,7 @@ export const useProductStore = create<ProductState>()(
           (p) =>
             p.name.toLowerCase().includes(lower) ||
             p.category.toLowerCase().includes(lower) ||
-            (p.brand && p.brand.toLowerCase().includes(lower))
+            (p.brand && p.brand.toLowerCase().includes(lower)),
         );
       },
 
@@ -112,7 +94,12 @@ export const useProductStore = create<ProductState>()(
         set({ loading: true });
         try {
           const response = await api.getProducts(orgId);
-          set({ products: response, loading: false, lastSync: Date.now(), error: null });
+          set({
+            products: response,
+            loading: false,
+            lastSync: Date.now(),
+            error: null,
+          });
 
           // Update cache
           const cached_items = response.map((p: Product) => ({
@@ -139,6 +126,6 @@ export const useProductStore = create<ProductState>()(
     {
       name: "product-store",
       version: 1,
-    }
-  )
+    },
+  ),
 );

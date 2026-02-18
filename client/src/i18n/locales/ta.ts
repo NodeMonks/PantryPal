@@ -63,6 +63,8 @@ export default {
     info: "தகவல்",
     download: "பதிவிறக்கு",
     print: "அச்சிடு",
+    refreshSuccess: "தரவு புதுப்பிக்கப்பட்டது",
+    refreshNoChange: "ஏற்கனவே புதுப்பித்த நிலையில் உள்ளது",
   },
 
   dashboard: {
@@ -104,6 +106,9 @@ export default {
     shelf: "அலமாரி",
     batch: "தொகுதி",
     days: "நாட்கள்",
+    today: "இன்று",
+    allTime: "மொத்தம்",
+    expiringSoon: "விரைவில் காலாவதி",
   },
 
   inventory: {

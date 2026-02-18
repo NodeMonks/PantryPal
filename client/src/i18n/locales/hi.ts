@@ -60,6 +60,8 @@ export default {
     next: "आगे",
     submit: "जमा करें",
     refresh: "रिफ्रेश",
+    refreshSuccess: "डेटा अपडेट हो गया",
+    refreshNoChange: "पहले से अप टू डेट है",
     info: "जानकारी",
     download: "डाउनलोड",
     print: "प्रिंट",
@@ -98,6 +100,9 @@ export default {
     shelf: "शेल्फ",
     batch: "बैच",
     days: "दिन",
+    today: "आज",
+    allTime: "कुल",
+    expiringSoon: "जल्द समाप्त",
   },
 
   inventory: {
@@ -270,16 +275,6 @@ export default {
     low: "कम",
     daysAgo: "{{count}} दिन पहले",
     daysLeft: "{{count}} दिन बचे",
-  },
-
-  returns: {
-    title: "वापसी",
-    subtitle: "उत्पाद वापसी और धनवापसी प्रबंधित करें",
-  },
-
-  reports: {
-    title: "रिपोर्ट",
-    subtitle: "बिक्री और इन्वेंटरी रिपोर्ट देखें",
   },
 
   returns: {

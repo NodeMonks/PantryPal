@@ -62,6 +62,8 @@ export default {
     next: "Next",
     submit: "Submit",
     refresh: "Refresh",
+    refreshSuccess: "Data refreshed",
+    refreshNoChange: "Already up to date",
     info: "Info",
     download: "Download",
     print: "Print",
@@ -102,6 +104,9 @@ export default {
     shelf: "Shelf",
     batch: "Batch",
     days: "days",
+    today: "Today",
+    allTime: "All time",
+    expiringSoon: "Expiring Soon",
   },
 
   // ── Inventory ─────────────────────────────────────────────────────────

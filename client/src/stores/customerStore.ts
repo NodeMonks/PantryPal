@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { cache, type CustomerCache, type TenantScope } from "@/lib/indexeddb";
+import { cache } from "@/lib/indexeddb";
 import { api, type Customer } from "@/lib/api";
 
 interface CustomerState {
@@ -13,7 +13,7 @@ interface CustomerState {
   // Actions
   loadCustomers: (orgId: string) => Promise<void>;
   createCustomer: (
-    customer: Omit<Customer, "id" | "created_at">
+    customer: Omit<Customer, "id" | "created_at">,
   ) => Promise<Customer>;
   addCustomer: (customer: Customer) => void;
   updateCustomer: (customerId: string, updates: Partial<Customer>) => void;
@@ -36,21 +36,7 @@ export const useCustomerStore = create<CustomerState>()(
       loadCustomers: async (orgId: string) => {
         set({ loading: true, currentOrgId: orgId });
         try {
-          // Try to load from IndexedDB first
-          const cached = await cache.getCustomers({ orgId, storeId: orgId });
-          if (cached.length > 0) {
-            const customers: Customer[] = cached.map((c: CustomerCache) => ({
-              id: c.id,
-              name: c.name,
-              phone: c.phone || null,
-              email: null,
-              address: null,
-              created_at: new Date(c.updatedAt).toISOString(),
-            }));
-            set({ customers, loading: false, error: null });
-          }
-
-          // Fetch from server
+          // Always fetch from server for accurate data; IndexedDB is for offline lookup only.
           const response = await api.getCustomers(orgId);
           set({
             customers: response,
@@ -110,7 +96,7 @@ export const useCustomerStore = create<CustomerState>()(
       updateCustomer: (customerId: string, updates: Partial<Customer>) => {
         const state = get();
         const updated = state.customers.map((c) =>
-          c.id === customerId ? { ...c, ...updates } : c
+          c.id === customerId ? { ...c, ...updates } : c,
         );
         set({ customers: updated });
       },
@@ -128,7 +114,7 @@ export const useCustomerStore = create<CustomerState>()(
           (c) =>
             c.name.toLowerCase().includes(lower) ||
             (c.email && c.email.toLowerCase().includes(lower)) ||
-            (c.phone && c.phone.includes(query))
+            (c.phone && c.phone.includes(query)),
         );
       },
 
@@ -168,6 +154,6 @@ export const useCustomerStore = create<CustomerState>()(
     {
       name: "customer-store",
       version: 1,
-    }
-  )
+    },
+  ),
 );

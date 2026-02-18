@@ -63,6 +63,8 @@ export default {
     info: "సమాచారం",
     download: "డౌన్లోడ్",
     print: "ముద్రించు",
+    refreshSuccess: "డేటా రిఫ్రెష్ అయింది",
+    refreshNoChange: "ఇప్పటికే అప్‌డేట్ అయింది",
   },
 
   dashboard: {
@@ -103,6 +105,9 @@ export default {
     shelf: "షెల్ఫ్",
     batch: "బ్యాచ్",
     days: "రోజులు",
+    today: "ఈ రోజు",
+    allTime: "మొత్తం",
+    expiringSoon: "త్వరలో గడువు",
   },
 
   inventory: {

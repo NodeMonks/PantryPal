@@ -4,7 +4,7 @@ import {
   type Product,
   type InsertProduct,
 } from "../../shared/schema";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and, or, lt, lte, gt, isNotNull, sql } from "drizzle-orm";
 import type { IRepository } from "./IRepository";
 
 /**
@@ -24,8 +24,8 @@ export class ProductRepository implements IRepository<Product> {
         and(
           eq(products.id, id),
           eq(products.org_id, orgId),
-          eq(products.is_active, true)
-        )
+          eq(products.is_active, true),
+        ),
       )
       .limit(1);
     return result[0] || null;
@@ -36,7 +36,7 @@ export class ProductRepository implements IRepository<Product> {
    */
   async findAll(
     orgId: string,
-    filters?: Record<string, any>
+    filters?: Record<string, any>,
   ): Promise<Product[]> {
     return db
       .select()
@@ -50,13 +50,13 @@ export class ProductRepository implements IRepository<Product> {
   async findByCode(
     code: string,
     orgId: string,
-    type: "barcode" | "qr" = "barcode"
+    type: "barcode" | "qr" = "barcode",
   ): Promise<Product | null> {
     const field = type === "barcode" ? products.barcode : products.qr_code;
     const fieldName = type === "barcode" ? "barcode" : "qr_code";
 
     console.log(
-      `    📋 Query: SELECT WHERE ${fieldName} = "${code}" AND org_id = ${orgId}`
+      `    📋 Query: SELECT WHERE ${fieldName} = "${code}" AND org_id = ${orgId}`,
     );
 
     const result = await db
@@ -66,8 +66,8 @@ export class ProductRepository implements IRepository<Product> {
         and(
           eq(field, code),
           eq(products.org_id, orgId),
-          eq(products.is_active, true)
-        )
+          eq(products.is_active, true),
+        ),
       )
       .limit(1);
 
@@ -76,7 +76,7 @@ export class ProductRepository implements IRepository<Product> {
       console.log(
         `    📌 Found: id=${result[0].id}, ${fieldName}=${
           result[0][fieldName as keyof (typeof result)[0]]
-        }`
+        }`,
       );
     }
 
@@ -87,15 +87,17 @@ export class ProductRepository implements IRepository<Product> {
    * Find products with low stock (below min_stock_level)
    */
   async findLowStock(orgId: string): Promise<Product[]> {
-    const result = await (db as any).execute(
-      `SELECT * FROM products
-      WHERE org_id = $1 
-        AND is_active = true 
-        AND quantity_in_stock < min_stock_level
-      ORDER BY quantity_in_stock ASC`,
-      orgId
-    );
-    return result as Product[];
+    return db
+      .select()
+      .from(products)
+      .where(
+        and(
+          eq(products.org_id, orgId),
+          eq(products.is_active, true),
+          sql`${products.quantity_in_stock} < ${products.min_stock_level}`,
+        ),
+      )
+      .orderBy(products.quantity_in_stock);
   }
 
   /**
@@ -103,24 +105,26 @@ export class ProductRepository implements IRepository<Product> {
    */
   async findNearExpiry(
     orgId: string,
-    daysUntilExpiry: number = 7
+    daysUntilExpiry: number = 7,
   ): Promise<Product[]> {
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + daysUntilExpiry);
-    const futureDateStr = futureDate.toISOString().split("T")[0];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    const result = await (db as any).execute(
-      `SELECT * FROM products
-      WHERE org_id = $1 
-        AND is_active = true 
-        AND expiry_date IS NOT NULL
-        AND expiry_date <= $2
-        AND expiry_date > CURRENT_DATE
-      ORDER BY expiry_date ASC`,
-      orgId,
-      futureDateStr
-    );
-    return result as Product[];
+    return db
+      .select()
+      .from(products)
+      .where(
+        and(
+          eq(products.org_id, orgId),
+          eq(products.is_active, true),
+          isNotNull(products.expiry_date),
+          lte(products.expiry_date, futureDate.toISOString().split("T")[0]),
+          gt(products.expiry_date, today.toISOString().split("T")[0]),
+        ),
+      )
+      .orderBy(products.expiry_date);
   }
 
   /**
@@ -144,7 +148,7 @@ export class ProductRepository implements IRepository<Product> {
   async update(
     id: string,
     data: Partial<Product>,
-    orgId: string
+    orgId: string,
   ): Promise<Product> {
     const result = await db
       .update(products)
@@ -188,7 +192,7 @@ export class ProductRepository implements IRepository<Product> {
   async updateStock(
     id: string,
     orgId: string,
-    delta: number
+    delta: number,
   ): Promise<Product> {
     // Fetch current quantity
     const product = await this.findById(id, orgId);
@@ -201,15 +205,15 @@ export class ProductRepository implements IRepository<Product> {
     if (newQuantity < 0) {
       throw new Error(
         `Insufficient stock for product ${id}. Current: ${currentQty}, Required: ${Math.abs(
-          delta
-        )}, Shortfall: ${Math.abs(newQuantity)}`
+          delta,
+        )}, Shortfall: ${Math.abs(newQuantity)}`,
       );
     }
 
     const updated = await this.update(
       id,
       { quantity_in_stock: newQuantity } as Partial<Product>,
-      orgId
+      orgId,
     );
 
     return updated;
@@ -224,18 +228,17 @@ export class ProductRepository implements IRepository<Product> {
     nearExpiry: number;
     totalValue: number;
   }> {
-    const stats = await (db as any).execute(
-      `SELECT 
-        COUNT(*) as total,
-        SUM(CASE WHEN quantity_in_stock < min_stock_level THEN 1 ELSE 0 END) as low_stock,
-        SUM(CASE WHEN expiry_date <= CURRENT_DATE + INTERVAL '7 days' AND expiry_date > CURRENT_DATE THEN 1 ELSE 0 END) as near_expiry,
-        SUM(quantity_in_stock::numeric * mrp) as total_value
-      FROM products
-      WHERE org_id = $1 AND is_active = true`,
-      orgId
-    );
+    const stats = await db
+      .select({
+        total: sql<string>`COUNT(*)`,
+        low_stock: sql<string>`SUM(CASE WHEN quantity_in_stock < min_stock_level THEN 1 ELSE 0 END)`,
+        near_expiry: sql<string>`SUM(CASE WHEN expiry_date <= CURRENT_DATE + INTERVAL '7 days' AND expiry_date > CURRENT_DATE THEN 1 ELSE 0 END)`,
+        total_value: sql<string>`SUM(quantity_in_stock::numeric * mrp::numeric)`,
+      })
+      .from(products)
+      .where(and(eq(products.org_id, orgId), eq(products.is_active, true)));
 
-    const row = (stats as any[])[0];
+    const row = stats[0] as any;
     return {
       total: parseInt(row.total) || 0,
       lowStock: parseInt(row.low_stock) || 0,
