@@ -29,6 +29,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { api, type Product } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProductStore } from "@/stores/productStore";
 import { Link } from "react-router-dom";
 import {
   Plus,
@@ -62,6 +63,7 @@ export default function Inventory() {
   const { user } = useAuth();
   const { t } = useTranslation();
   const { toast } = useToast();
+  const productStore = useProductStore();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -88,6 +90,10 @@ export default function Inventory() {
         const productsData = await api.getProducts();
         if (!abortController.signal.aborted) {
           setProducts(productsData);
+          // Keep productStore in sync so Dashboard shows fresh data
+          if (user?.org_id) {
+            productStore.syncWithServer(user.org_id).catch(() => {});
+          }
         }
       } catch (error) {
         if (!abortController.signal.aborted) {
@@ -116,7 +122,7 @@ export default function Inventory() {
       }
       return () => abortController.abort();
     },
-    [toast],
+    [toast, user?.org_id, productStore],
   );
 
   // Load products on mount with cleanup
@@ -474,6 +480,7 @@ export default function Inventory() {
       // Optimistic update: remove from UI immediately
       const productId = productToDelete.id;
       setProducts((prev) => prev.filter((p) => p.id !== productId));
+      productStore.deleteProduct(productId); // sync store for Dashboard
       setDeleteDialogOpen(false);
       setProductToDelete(null);
 

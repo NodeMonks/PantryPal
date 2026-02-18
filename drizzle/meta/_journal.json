@@ -78,6 +78,13 @@
       "when": 1768299790523,
       "tag": "0010_lazy_dark_phoenix",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1768299790819,
+      "tag": "0011_add_developer_mode",
+      "breakpoints": true
     }
   ]
 }

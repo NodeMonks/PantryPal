@@ -1,7 +1,7 @@
 -- Migration: Add is_developer flag to organizations
 -- This allows developers to bypass all subscription and plan restrictions
 
-ALTER TABLE organizations 
+ALTER TABLE organizations
 ADD COLUMN
 IF NOT EXISTS is_developer boolean DEFAULT false NOT NULL;
 
