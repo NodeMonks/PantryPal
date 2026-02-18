@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Card,
   CardContent,
@@ -26,6 +27,7 @@ import { useToast } from "@/hooks/use-toast";
 import QrScanner from "qr-scanner";
 
 export default function QRScanner() {
+  const { t } = useTranslation();
   const [manualCode, setManualCode] = useState("");
   const [scannedData, setScannedData] = useState<any>(null);
   const [product, setProduct] = useState<Product | null>(null);
@@ -111,7 +113,7 @@ export default function QRScanner() {
     const expiry = new Date(expiryDate);
     const now = new Date();
     const daysDiff = Math.ceil(
-      (expiry.getTime() - now.getTime()) / (1000 * 3600 * 24)
+      (expiry.getTime() - now.getTime()) / (1000 * 3600 * 24),
     );
 
     if (daysDiff < 0) {
@@ -144,7 +146,7 @@ export default function QRScanner() {
           returnDetailedScanResult: true,
           highlightScanRegion: true,
           highlightCodeOutline: true,
-        }
+        },
       );
 
       await qrScanner.start();
@@ -208,8 +210,8 @@ export default function QRScanner() {
           operation === "add"
             ? "Added"
             : operation === "subtract"
-            ? "Removed"
-            : "Set"
+              ? "Removed"
+              : "Set"
         } ${stockQuantity} ${product.unit}`,
       });
 
@@ -236,10 +238,10 @@ export default function QRScanner() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground">QR Scanner</h1>
-        <p className="text-muted-foreground">
-          Scan QR codes to quickly find and manage products
-        </p>
+        <h1 className="text-3xl font-bold text-foreground">
+          {t("qrScanner.title")}
+        </h1>
+        <p className="text-muted-foreground">{t("qrScanner.subtitle")}</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -258,11 +260,13 @@ export default function QRScanner() {
             {/* Manual Input */}
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="manual-code">Manual Code Entry</Label>
+                <Label htmlFor="manual-code">
+                  {t("qrScanner.manualEntry")}
+                </Label>
                 <div className="flex gap-2">
                   <Input
                     id="manual-code"
-                    placeholder="Enter QR code or product ID"
+                    placeholder={t("qrScanner.manualPlaceholder")}
                     value={manualCode}
                     onChange={(e) => setManualCode(e.target.value)}
                     onKeyPress={(e) => e.key === "Enter" && handleManualScan()}
@@ -290,26 +294,26 @@ export default function QRScanner() {
                   <div className="border-2 border-dashed rounded-lg p-8 text-center bg-muted/50 h-64 flex flex-col justify-center">
                     <Camera className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                     <p className="text-muted-foreground mb-4">
-                      Ready to scan QR codes
+                      {t("qrScanner.pointCamera")}
                     </p>
                     <div className="flex gap-2 justify-center">
                       <Button onClick={startQRScanning}>
                         <QrCode className="h-4 w-4 mr-2" />
-                        Scan QR
+                        {t("qrScanner.startCamera")}
                       </Button>
                     </div>
                   </div>
                 )}
                 {isScanning && (
                   <div className="absolute top-2 right-2 z-10 flex gap-2">
-                    <Badge variant="secondary">QR Scanner</Badge>
+                    <Badge variant="secondary">{t("qrScanner.title")}</Badge>
                     <Button
                       onClick={stopScanning}
                       variant="destructive"
                       size="sm"
                     >
                       <Square className="h-4 w-4 mr-2" />
-                      Stop
+                      {t("newBill.stopScanner")}
                     </Button>
                   </div>
                 )}
@@ -331,7 +335,7 @@ export default function QRScanner() {
           {scannedData && (
             <Card>
               <CardHeader>
-                <CardTitle>Scanned Code Data</CardTitle>
+                <CardTitle>{t("qrScanner.scannedData")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="bg-muted p-4 rounded-lg">
@@ -404,7 +408,9 @@ export default function QRScanner() {
 
                     {/* Stock Update */}
                     <div className="space-y-2">
-                      <Label className="text-sm">Update Stock</Label>
+                      <Label className="text-sm">
+                        {t("qrScanner.stockUpdate")}
+                      </Label>
                       <div className="flex gap-2">
                         <Input
                           type="number"
@@ -440,7 +446,7 @@ export default function QRScanner() {
                       <Label className="text-sm font-medium">Expiry Date</Label>
                       <p>
                         {new Date(product.expiry_date).toLocaleDateString(
-                          "en-IN"
+                          "en-IN",
                         )}
                       </p>
                     </div>

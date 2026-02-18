@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Card,
   CardContent,
@@ -27,6 +28,7 @@ const getCameraConstraints = () => ({
 });
 
 export default function BarcodeScanner() {
+  const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -64,7 +66,7 @@ export default function BarcodeScanner() {
       }
       setStatus("error");
     },
-    [toast]
+    [toast],
   );
 
   const startScanner = useCallback(async () => {
@@ -85,7 +87,7 @@ export default function BarcodeScanner() {
 
       const reader = new BrowserMultiFormatReader(
         undefined,
-        DECODE_INTERVAL_MS
+        DECODE_INTERVAL_MS,
       );
       readerRef.current = reader;
 
@@ -104,7 +106,7 @@ export default function BarcodeScanner() {
             // ZXing emits decode errors frequently; ignore unless critical.
             return;
           }
-        }
+        },
       );
     } catch (err) {
       handleError(err);
@@ -134,24 +136,22 @@ export default function BarcodeScanner() {
           <div className="flex items-center gap-2">
             <Barcode className="h-6 w-6" />
             <div>
-              <CardTitle>Barcode Scanner</CardTitle>
-              <CardDescription>
-                Uses your device camera for 1D/2D codes with manual fallback.
-              </CardDescription>
+              <CardTitle>{t("barcode.title")}</CardTitle>
+              <CardDescription>{t("barcode.physicalTip")}</CardDescription>
             </div>
           </div>
           <Badge variant={status === "success" ? "default" : "secondary"}>
             {status === "scanning"
-              ? "Scanning"
+              ? t("barcode.scanning")
               : status === "success"
-              ? "Captured"
-              : status === "denied"
-              ? "Permission denied"
-              : status === "no-camera"
-              ? "No camera"
-              : status === "error"
-              ? "Error"
-              : "Idle"}
+                ? t("common.success", "Captured")
+                : status === "denied"
+                  ? t("barcode.denied").substring(0, 20)
+                  : status === "no-camera"
+                    ? t("barcode.noCamera").substring(0, 15)
+                    : status === "error"
+                      ? t("barcode.error").substring(0, 10)
+                      : t("common.ready", "Idle")}
           </Badge>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -174,32 +174,34 @@ export default function BarcodeScanner() {
             <Alert>
               <AlertDescription>
                 {status === "denied"
-                  ? "Camera access was denied. Enable permissions or use manual entry."
-                  : "No camera detected. Please enter the code manually."}
+                  ? t("barcode.denied")
+                  : t("barcode.noCamera")}
               </AlertDescription>
             </Alert>
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="manual-barcode">Enter code manually</Label>
+            <Label htmlFor="manual-barcode">{t("barcode.manualEntry")}</Label>
             <div className="flex gap-2">
               <Input
                 id="manual-barcode"
-                placeholder="Type or paste barcode"
+                placeholder={t("barcode.manualPlaceholder")}
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleManualSubmit();
                 }}
               />
-              <Button onClick={handleManualSubmit}>Submit</Button>
+              <Button onClick={handleManualSubmit}>
+                {t("barcode.submit")}
+              </Button>
             </div>
           </div>
 
           {lastCode && (
             <Alert>
               <AlertDescription>
-                Last code: <strong>{lastCode}</strong>
+                {t("barcode.lastScanned")}: <strong>{lastCode}</strong>
               </AlertDescription>
             </Alert>
           )}
@@ -210,10 +212,10 @@ export default function BarcodeScanner() {
               onClick={startScanner}
               disabled={status === "scanning"}
             >
-              Restart Scanner
+              {t("barcode.startScanner")}
             </Button>
             <Button variant="secondary" onClick={stopScanner}>
-              Stop
+              {t("newBill.stopScanner")}
             </Button>
           </div>
 

@@ -680,6 +680,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         plan: org.plan_name || "starter",
         subscriptionId: org.subscription_id,
         limits,
+        isDeveloper: org.is_developer || false,
+      });
+    }),
+  );
+
+  // Toggle developer mode for an organization (for development/testing)
+  // WARNING: This endpoint should be secured or removed in production
+  app.post(
+    "/api/subscription/developer-mode",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
+      const orgId = requireOrgId(req);
+      const { enabled, secretKey } = req.body;
+
+      // Add a secret key check to prevent unauthorized access
+      const DEV_SECRET = env.DEVELOPER_MODE_SECRET || "dev-mode-secret-key";
+
+      if (secretKey !== DEV_SECRET) {
+        return res.status(403).json({
+          error: "Unauthorized",
+          message: "Invalid secret key for developer mode",
+        });
+      }
+
+      const { db } = await import("./db");
+      const { organizations } = await import("../shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      await db
+        .update(organizations)
+        .set({
+          is_developer: enabled === true,
+          payment_status: enabled === true ? "active" : "pending",
+        })
+        .where(eq(organizations.id, orgId));
+
+      res.json({
+        success: true,
+        message: `Developer mode ${enabled ? "enabled" : "disabled"}`,
+        isDeveloper: enabled === true,
       });
     }),
   );

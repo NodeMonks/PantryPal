@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -80,6 +81,7 @@ interface Return {
 }
 
 export default function ReturnsRefunds() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -306,9 +308,7 @@ export default function ReturnsRefunds() {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-orange-500 bg-clip-text text-transparent">
             Returns & Refunds
           </h1>
-          <p className="text-muted-foreground mt-1">
-            Process returns and manage refunds
-          </p>
+          <p className="text-muted-foreground mt-1">{t("returns.subtitle")}</p>
         </div>
       </div>
 
@@ -319,15 +319,13 @@ export default function ReturnsRefunds() {
             <Search className="h-5 w-5 text-orange-600" />
             Search Bill
           </CardTitle>
-          <CardDescription>
-            Enter bill number to initiate return
-          </CardDescription>
+          <CardDescription>{t("returns.searchBill")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex gap-2">
             <div className="flex-1">
               <Input
-                placeholder="Enter bill number (e.g., BILL-2024-001)"
+                placeholder={t("returns.searchPlaceholder")}
                 value={searchBillNumber}
                 onChange={(e) => setSearchBillNumber(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && searchBill()}
@@ -448,12 +446,12 @@ export default function ReturnsRefunds() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
-                  <TableHead>Bill Number</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Method</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Reason</TableHead>
+                  <TableHead>{t("returns.billNumber")}</TableHead>
+                  <TableHead>{t("returns.customer")}</TableHead>
+                  <TableHead>{t("billing.amount", "Amount")}</TableHead>
+                  <TableHead>{t("returns.refundMethod")}</TableHead>
+                  <TableHead>{t("returns.status")}</TableHead>
+                  <TableHead>{t("returns.reason")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -485,7 +483,7 @@ export default function ReturnsRefunds() {
           ) : (
             <div className="text-center py-12">
               <RotateCcw className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-50" />
-              <p className="text-muted-foreground">No returns found</p>
+              <p className="text-muted-foreground">{t("returns.noReturns")}</p>
             </div>
           )}
         </CardContent>
@@ -495,10 +493,8 @@ export default function ReturnsRefunds() {
       <Dialog open={showReturnDialog} onOpenChange={setShowReturnDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm Return</DialogTitle>
-            <DialogDescription>
-              Review return details and process refund
-            </DialogDescription>
+            <DialogTitle>{t("returns.processReturn")}</DialogTitle>
+            <DialogDescription>{t("returns.refundMethod")}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -512,23 +508,23 @@ export default function ReturnsRefunds() {
             </div>
 
             <div className="space-y-2">
-              <Label>Refund Method</Label>
+              <Label>{t("returns.refundMethod")}</Label>
               <select
                 className="w-full border rounded-md p-2"
                 value={refundMethod}
                 onChange={(e) => setRefundMethod(e.target.value as any)}
               >
-                <option value="cash">Cash</option>
+                <option value="cash">{t("returns.cash")}</option>
                 <option value="card">Card Reversal</option>
                 <option value="upi">UPI Refund</option>
-                <option value="store_credit">Store Credit</option>
+                <option value="store_credit">{t("returns.storeCredit")}</option>
               </select>
             </div>
 
             <div className="space-y-2">
-              <Label>Return Reason *</Label>
+              <Label>{t("returns.reason")} *</Label>
               <Textarea
-                placeholder="Describe the reason for return..."
+                placeholder={t("returns.reasonPlaceholder")}
                 value={returnReason}
                 onChange={(e) => setReturnReason(e.target.value)}
                 rows={3}
@@ -548,8 +544,8 @@ export default function ReturnsRefunds() {
               disabled={createReturnMutation.isPending}
             >
               {createReturnMutation.isPending
-                ? "Processing..."
-                : "Process Refund"}
+                ? t("common.loading", "Processing...")
+                : t("returns.processReturn")}
             </Button>
           </DialogFooter>
         </DialogContent>

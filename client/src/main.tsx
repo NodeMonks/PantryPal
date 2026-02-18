@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import "./i18n"; // must be imported before any component that uses useTranslation
 import { DevErrorBoundary } from "./components/DevErrorBoundary";
 import { registerSW } from "virtual:pwa-register";
 
@@ -39,5 +40,5 @@ createRoot(document.getElementById("root")!).render(
     </DevErrorBoundary>
   ) : (
     <App />
-  )
+  ),
 );

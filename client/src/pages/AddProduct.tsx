@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Card,
   CardContent,
@@ -27,6 +28,7 @@ import { useProductStore } from "@/stores/productStore";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function AddProduct() {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     name: "",
     category: "",
@@ -195,11 +197,9 @@ export default function AddProduct() {
         </Button>
         <div>
           <h1 className="text-3xl font-bold text-foreground">
-            Add New Product
+            {t("addProduct.title")}
           </h1>
-          <p className="text-muted-foreground">
-            Add a new product to your inventory
-          </p>
+          <p className="text-muted-foreground">{t("addProduct.subtitle")}</p>
         </div>
       </div>
 
@@ -209,34 +209,38 @@ export default function AddProduct() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Package className="h-5 w-5" />
-                Product Information
+                {t("addProduct.productInfo")}
               </CardTitle>
-              <CardDescription>Enter the basic product details</CardDescription>
+              <CardDescription>
+                {t("addProduct.productInfoDesc")}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Product Name *</Label>
+                    <Label htmlFor="name">{t("addProduct.productName")}</Label>
                     <Input
                       id="name"
                       value={formData.name}
                       onChange={(e) =>
                         handleInputChange("name", e.target.value)
                       }
-                      placeholder="Enter product name"
+                      placeholder={t("addProduct.namePlaceholder")}
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="category">Category *</Label>
+                    <Label htmlFor="category">{t("addProduct.category")}</Label>
                     <Select
                       onValueChange={(value) =>
                         handleInputChange("category", value)
                       }
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
+                        <SelectValue
+                          placeholder={t("addProduct.selectCategory")}
+                        />
                       </SelectTrigger>
                       <SelectContent>
                         {categories.map((category) => (
@@ -248,18 +252,18 @@ export default function AddProduct() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="brand">Brand</Label>
+                    <Label htmlFor="brand">{t("addProduct.brand")}</Label>
                     <Input
                       id="brand"
                       value={formData.brand}
                       onChange={(e) =>
                         handleInputChange("brand", e.target.value)
                       }
-                      placeholder="Enter brand name"
+                      placeholder={t("addProduct.brandPlaceholder")}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="unit">Unit</Label>
+                    <Label htmlFor="unit">{t("addProduct.unit")}</Label>
                     <Select
                       onValueChange={(value) =>
                         handleInputChange("unit", value)
@@ -282,7 +286,7 @@ export default function AddProduct() {
 
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="space-y-2">
-                    <Label htmlFor="mrp">MRP (₹) *</Label>
+                    <Label htmlFor="mrp">{t("addProduct.mrp")}</Label>
                     <Input
                       id="mrp"
                       type="number"
@@ -295,7 +299,9 @@ export default function AddProduct() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="buying_cost">Buying Cost (₹) *</Label>
+                    <Label htmlFor="buying_cost">
+                      {t("addProduct.buyingCost")}
+                    </Label>
                     <Input
                       id="buying_cost"
                       type="number"
@@ -310,7 +316,9 @@ export default function AddProduct() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="quantity_in_stock">Initial Stock</Label>
+                    <Label htmlFor="quantity_in_stock">
+                      {t("addProduct.initialStock")}
+                    </Label>
                     <Input
                       id="quantity_in_stock"
                       type="number"
@@ -327,7 +335,7 @@ export default function AddProduct() {
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="space-y-2">
                     <Label htmlFor="manufacturing_date">
-                      Manufacturing Date
+                      {t("addProduct.mfgDate")}
                     </Label>
                     <Input
                       id="manufacturing_date"
@@ -339,7 +347,9 @@ export default function AddProduct() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="expiry_date">Expiry Date</Label>
+                    <Label htmlFor="expiry_date">
+                      {t("addProduct.expiryDate")}
+                    </Label>
                     <Input
                       id="expiry_date"
                       type="date"
@@ -350,7 +360,9 @@ export default function AddProduct() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="min_stock_level">Min Stock Level</Label>
+                    <Label htmlFor="min_stock_level">
+                      {t("addProduct.minStockLevel")}
+                    </Label>
                     <Input
                       id="min_stock_level"
                       type="number"
@@ -365,24 +377,28 @@ export default function AddProduct() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
+                  <Label htmlFor="description">
+                    {t("addProduct.description")}
+                  </Label>
                   <Textarea
                     id="description"
                     value={formData.description}
                     onChange={(e) =>
                       handleInputChange("description", e.target.value)
                     }
-                    placeholder="Enter product description"
+                    placeholder={t("addProduct.descPlaceholder")}
                     rows={3}
                   />
                 </div>
 
                 <div className="flex gap-4 items-center">
                   <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? "Adding..." : "Add Product"}
+                    {isSubmitting
+                      ? t("addProduct.adding")
+                      : t("addProduct.addBtn")}
                   </Button>
                   <Button type="button" variant="outline" asChild>
-                    <Link to="/inventory">Cancel</Link>
+                    <Link to="/inventory">{t("addProduct.cancel")}</Link>
                   </Button>
                 </div>
               </form>
@@ -395,10 +411,10 @@ export default function AddProduct() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <QrCode className="h-5 w-5" />
-                QR Code Generator
+                {t("addProduct.qrGenerator")}
               </CardTitle>
               <CardDescription>
-                Generate QR code for this product
+                {t("addProduct.qrGeneratorDesc")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -409,12 +425,12 @@ export default function AddProduct() {
                 }
                 className="w-full"
               >
-                Generate QR Code
+                {t("addProduct.generateQr")}
               </Button>
 
               {(!formData.name || !formData.mrp || !formData.buying_cost) && (
                 <p className="text-xs text-muted-foreground text-center">
-                  Fill name, MRP and buying cost to generate QR code
+                  {t("addProduct.qrHint")}
                 </p>
               )}
 
@@ -438,7 +454,7 @@ export default function AddProduct() {
                       <p className="text-muted-foreground">
                         Exp:{" "}
                         {new Date(formData.expiry_date).toLocaleDateString(
-                          "en-IN"
+                          "en-IN",
                         )}
                       </p>
                     )}
@@ -456,14 +472,14 @@ export default function AddProduct() {
                         const link = document.createElement("a");
                         link.download = `qr-${formData.name.replace(
                           /[^a-zA-Z0-9]/g,
-                          "-"
+                          "-",
                         )}.png`;
                         link.href = canvas.toDataURL();
                         link.click();
                       }
                     }}
                   >
-                    Download QR Code
+                    {t("addProduct.downloadQr")}
                   </Button>
                 </div>
               )}

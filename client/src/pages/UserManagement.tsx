@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Card,
@@ -71,6 +72,7 @@ interface User {
 }
 
 export default function UserManagement() {
+  const { t } = useTranslation();
   const { hasRole, orgId } = useAuth();
   const { limits, canAddUser } = usePlanLimits();
   const [users, setUsers] = useState<User[]>([]);
@@ -306,10 +308,10 @@ export default function UserManagement() {
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-gray-900 dark:text-white">
-              User Management
+              {t("users.title")}
             </h1>
             <p className="text-gray-500 dark:text-gray-400 mt-1">
-              Manage user accounts and permissions
+              {t("users.subtitle")}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -325,7 +327,7 @@ export default function UserManagement() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-orange-100 text-sm font-medium">
-                    Total Users
+                    {t("users.totalUsers")}
                   </p>
                   <h3 className="text-3xl md:text-4xl font-bold mt-2">
                     {stats.total}
@@ -348,7 +350,7 @@ export default function UserManagement() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">
-                    Active Users
+                    {t("users.activeUsers")}
                   </p>
                   <h3 className="text-3xl md:text-4xl font-bold mt-2 text-green-600">
                     {stats.active}
@@ -370,7 +372,7 @@ export default function UserManagement() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">
-                    Inactive
+                    {t("users.inactive")}
                   </p>
                   <h3 className="text-3xl md:text-4xl font-bold mt-2 text-red-600">
                     {stats.inactive}
@@ -389,20 +391,20 @@ export default function UserManagement() {
             <CardContent className="p-5 md:p-6">
               <div className="space-y-3">
                 <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">
-                  Quick Actions
+                  {t("common.quickActions")}
                 </p>
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                   <DialogTrigger asChild>
                     <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white">
                       <UserPlus className="h-4 w-4 mr-2" />
-                      Create User
+                      {t("users.addUser")}
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-2xl">
                     <DialogHeader>
-                      <DialogTitle>Create New User</DialogTitle>
+                      <DialogTitle>{t("users.addUser")}</DialogTitle>
                       <DialogDescription>
-                        Add a new user to the organization
+                        {t("users.subtitle")}
                       </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleCreateUser}>
@@ -531,14 +533,14 @@ export default function UserManagement() {
         {/* Search and Filters */}
         <Card className="border-0 shadow-md">
           <CardHeader>
-            <CardTitle>Search & Filter Users</CardTitle>
+            <CardTitle>{t("users.searchPlaceholder")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Search</Label>
                 <Input
-                  placeholder="Search by name, email, or username..."
+                  placeholder={t("users.searchPlaceholder")}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full"
@@ -546,33 +548,41 @@ export default function UserManagement() {
               </div>
 
               <div className="space-y-2">
-                <Label>Filter by Role</Label>
+                <Label>{t("users.roleFilter")}</Label>
                 <Select value={roleFilter} onValueChange={setRoleFilter}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Roles</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="store_manager">Store Manager</SelectItem>
-                    <SelectItem value="inventory_manager">
-                      Inventory Manager
+                    <SelectItem value="all">{t("users.allRoles")}</SelectItem>
+                    <SelectItem value="admin">{t("users.admin")}</SelectItem>
+                    <SelectItem value="store_manager">
+                      {t("users.manager")}
                     </SelectItem>
-                    <SelectItem value="cashier">Cashier</SelectItem>
+                    <SelectItem value="inventory_manager">
+                      {t("users.staff")}
+                    </SelectItem>
+                    <SelectItem value="cashier">
+                      {t("users.cashier")}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <Label>Filter by Status</Label>
+                <Label>{t("users.statusFilter")}</Label>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
+                    <SelectItem value="all">
+                      {t("users.allStatuses")}
+                    </SelectItem>
+                    <SelectItem value="active">{t("users.active")}</SelectItem>
+                    <SelectItem value="inactive">
+                      {t("users.inactive")}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -585,7 +595,9 @@ export default function UserManagement() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-xl md:text-2xl">All Users</CardTitle>
+                <CardTitle className="text-xl md:text-2xl">
+                  {t("users.totalUsers")}
+                </CardTitle>
                 <CardDescription className="mt-1.5">
                   Showing {filteredUsers.length} of {users.length} users
                 </CardDescription>
@@ -597,14 +609,24 @@ export default function UserManagement() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-gray-50 dark:bg-gray-800/50">
-                    <TableHead className="font-semibold">Username</TableHead>
+                    <TableHead className="font-semibold">
+                      {t("users.username")}
+                    </TableHead>
                     <TableHead className="font-semibold">Email</TableHead>
-                    <TableHead className="font-semibold">Full Name</TableHead>
-                    <TableHead className="font-semibold">Role</TableHead>
-                    <TableHead className="font-semibold">Status</TableHead>
-                    <TableHead className="font-semibold">Created</TableHead>
+                    <TableHead className="font-semibold">
+                      {t("common.name")}
+                    </TableHead>
+                    <TableHead className="font-semibold">
+                      {t("users.role")}
+                    </TableHead>
+                    <TableHead className="font-semibold">
+                      {t("users.status", "Status")}
+                    </TableHead>
+                    <TableHead className="font-semibold">
+                      {t("users.joined")}
+                    </TableHead>
                     <TableHead className="font-semibold text-right">
-                      Actions
+                      {t("common.actions")}
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -628,7 +650,9 @@ export default function UserManagement() {
                               : "bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-900/30 border-0"
                           }
                         >
-                          {user.is_active ? "Active" : "Inactive"}
+                          {user.is_active
+                            ? t("users.active")
+                            : t("users.inactive")}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-gray-500">
@@ -656,7 +680,9 @@ export default function UserManagement() {
                                   : "text-green-600"
                               }
                             >
-                              {user.is_active ? "Deactivate" : "Activate"}
+                              {user.is_active
+                                ? t("users.deactivate")
+                                : t("users.activate")}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

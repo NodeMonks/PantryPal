@@ -1,3 +1,7 @@
+// NOTE: Plan-based access guardrails are temporarily disabled.
+// usePlanLimits returns unlimited access for all users.
+// useSubscriptionStatus and useFeatureAccess are kept intact for informational use.
+// To re-enable limits, restore the canAddUser / canCreateStore logic below.
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -60,36 +64,40 @@ export function useFeatureAccess(feature: string) {
 }
 
 export function usePlanLimits() {
+  // TEMPORARILY DISABLED: all limits bypassed – every operation is allowed.
+  // TO RE-ENABLE: restore the useSubscriptionStatus() call and the limit checks below.
+  return {
+    limits: undefined,
+    isLoading: false,
+    canCreateStore: (_currentCount: number) => true,
+    canAddUser: (_role: string, _currentCount: number) => true,
+    isPremium: true,
+    isStarter: false,
+  };
+  /* Original implementation – restore when re-enabling:
   const { data: subscription, isLoading } = useSubscriptionStatus();
-
   return {
     limits: subscription?.limits,
     isLoading,
     canCreateStore: (currentCount: number) => {
-      if (!subscription?.limits) return true; // Allow if limits not loaded
+      if (!subscription?.limits) return true;
       return currentCount < subscription.limits.maxStores;
     },
     canAddUser: (role: string, currentCount: number) => {
-      if (!subscription?.limits) return true; // Allow if limits not loaded
-
-      // Map role names to limit keys
-      const roleMap: Record<
-        string,
-        keyof typeof subscription.limits.maxRoleUsers
-      > = {
+      if (!subscription?.limits) return true;
+      const roleMap: Record<string, keyof typeof subscription.limits.maxRoleUsers> = {
         admin: "adminOrOwner",
         owner: "adminOrOwner",
         store_manager: "store_manager",
         inventory_manager: "inventory_manager",
       };
-
       const limitKey = roleMap[role];
-      if (!limitKey) return true; // Unknown role, allow
-
+      if (!limitKey) return true;
       const limit = subscription.limits.maxRoleUsers[limitKey];
       return currentCount < limit;
     },
     isPremium: subscription?.limits?.tier === "premium",
     isStarter: subscription?.limits?.tier === "starter",
   };
+  */
 }

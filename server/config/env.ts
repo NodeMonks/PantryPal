@@ -79,7 +79,7 @@ const envSchema = z.object({
     .optional()
     .refine(
       (v) => !v || /^\+[1-9]\d{1,14}$/.test(v),
-      "TWILIO_PHONE_NUMBER must be E.164 format (+123...)"
+      "TWILIO_PHONE_NUMBER must be E.164 format (+123...)",
     ),
 
   // Feature Flags
@@ -158,6 +158,12 @@ const envSchema = z.object({
   RAZORPAY_PLAN_ID_PROFESSIONAL_MONTHLY: z.string().optional(),
   RAZORPAY_PLAN_ID_ENTERPRISE_MONTHLY: z.string().optional(),
   SUBSCRIPTION_DEFAULT_PLAN: z.string().default("starter-monthly"),
+
+  // Developer Mode (for testing/development)
+  DEVELOPER_MODE_SECRET: z
+    .string()
+    .min(16, "DEVELOPER_MODE_SECRET must be at least 16 characters")
+    .default("dev-mode-secret-key-change-me"),
 });
 
 /**

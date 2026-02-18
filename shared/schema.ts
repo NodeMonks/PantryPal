@@ -328,6 +328,8 @@ export const organizations = pgTable("organizations", {
   payment_status: text("payment_status").default("pending"), // pending | active | inactive
   subscription_id: text("subscription_id"),
   plan_name: text("plan_name").default("starter"),
+  // Developer Mode - bypasses all subscription and plan restrictions
+  is_developer: boolean("is_developer").default(false).notNull(),
   created_at: timestamp("created_at").notNull().defaultNow(),
 });
 

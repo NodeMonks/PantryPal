@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Card,
   CardContent,
@@ -6,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { PageLoadingSkeleton } from "@/components/ui/page-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +44,7 @@ import {
 } from "lucide-react";
 
 export default function Dashboard() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const productStore = useProductStore();
   const customerStore = useCustomerStore();
@@ -79,7 +82,7 @@ export default function Dashboard() {
 
       const revenue = dayBills.reduce(
         (sum, bill) => sum + Number(bill.final_amount),
-        0
+        0,
       );
 
       data.push({
@@ -109,7 +112,7 @@ export default function Dashboard() {
   // Calculate metrics
   const totalProducts = productStore.products.length;
   const lowStockCount = productStore.products.filter(
-    (p) => (p.quantity_in_stock || 0) <= (p.min_stock_level || 0)
+    (p) => (p.quantity_in_stock || 0) <= (p.min_stock_level || 0),
   ).length;
 
   const todayBills = billStore.bills.filter((bill) => {
@@ -120,12 +123,12 @@ export default function Dashboard() {
 
   const todaySales = todayBills.reduce(
     (sum, bill) => sum + Number(bill.final_amount),
-    0
+    0,
   );
 
   const totalRevenue = billStore.bills.reduce(
     (sum, bill) => sum + Number(bill.final_amount),
-    0
+    0,
   );
 
   // Collect all batches from products
@@ -135,8 +138,8 @@ export default function Dashboard() {
         ...batch,
         productName: product.name,
         productId: product.id,
-      })
-    )
+      }),
+    ),
   );
 
   // Batches expiring soon (within 7 days)
@@ -144,7 +147,7 @@ export default function Dashboard() {
     if (!batch.expiry_date) return false;
     const daysUntilExpiry = Math.ceil(
       (new Date(batch.expiry_date).getTime() - new Date().getTime()) /
-        (1000 * 3600 * 24)
+        (1000 * 3600 * 24),
     );
     return daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
   });
@@ -155,103 +158,138 @@ export default function Dashboard() {
 
   if (productStore.loading || customerStore.loading || billStore.loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-          <p className="text-muted-foreground">Loading dashboard...</p>
-        </div>
-      </div>
+      <PageLoadingSkeleton
+        statCols={5}
+        tableRows={6}
+        tableCols={4}
+        showCharts
+        showAction={false}
+      />
     );
   }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Welcome to your PantryPal dashboard
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">
+            {t("dashboard.title")}
+          </h1>
+          <p className="text-muted-foreground">{t("dashboard.subtitle")}</p>
+        </div>
+        <div className="text-xs text-muted-foreground bg-muted px-3 py-1.5 rounded-full font-medium">
+          {new Date().toLocaleDateString("en-IN", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })}
+        </div>
       </div>
 
       {/* Key Metrics */}
-      <div className="grid gap-4 md:grid-cols-5">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Package className="h-4 w-4" />
-              Total Products
+      <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+        {/* Total Products */}
+        <Card className="relative overflow-hidden border-0 shadow-md">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-blue-700" />
+          <CardHeader className="pb-2 relative">
+            <CardTitle className="text-sm flex items-center gap-2 text-blue-100 font-medium">
+              <div className="bg-white/20 rounded-lg p-1.5">
+                <Package className="h-4 w-4 text-white" />
+              </div>
+              {t("dashboard.totalProducts")}
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalProducts}</div>
-            <p className="text-xs text-muted-foreground">
-              Across all categories
+          <CardContent className="relative">
+            <div className="text-3xl font-bold text-white">{totalProducts}</div>
+            <p className="text-xs text-blue-200 mt-1">
+              {t("dashboard.acrossCategories")}
             </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              Low Stock
+        {/* Low Stock */}
+        <Card className="relative overflow-hidden border-0 shadow-md">
+          <div
+            className={`absolute inset-0 ${lowStockCount > 0 ? "bg-gradient-to-br from-orange-500 to-red-600" : "bg-gradient-to-br from-emerald-500 to-emerald-700"}`}
+          />
+          <CardHeader className="pb-2 relative">
+            <CardTitle className="text-sm flex items-center gap-2 text-orange-100 font-medium">
+              <div className="bg-white/20 rounded-lg p-1.5">
+                <AlertTriangle className="h-4 w-4 text-white" />
+              </div>
+              {t("dashboard.lowStock")}
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">
-              {lowStockCount}
-            </div>
-            <p className="text-xs text-muted-foreground">Need restock</p>
+          <CardContent className="relative">
+            <div className="text-3xl font-bold text-white">{lowStockCount}</div>
+            <p className="text-xs text-orange-100 mt-1">
+              {t("dashboard.needRestock")}
+            </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4" />
-              Today Sales
+        {/* Today Sales */}
+        <Card className="relative overflow-hidden border-0 shadow-md">
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 to-teal-700" />
+          <CardHeader className="pb-2 relative">
+            <CardTitle className="text-sm flex items-center gap-2 text-emerald-100 font-medium">
+              <div className="bg-white/20 rounded-lg p-1.5">
+                <ShoppingCart className="h-4 w-4 text-white" />
+              </div>
+              {t("dashboard.todaySales")}
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+          <CardContent className="relative">
+            <div className="text-3xl font-bold text-white">
               ₹{Math.round(todaySales).toLocaleString()}
             </div>
-            <p className="text-xs text-muted-foreground">
-              {todayBills.length} bills
+            <p className="text-xs text-emerald-100 mt-1">
+              {todayBills.length} {t("dashboard.bills")}
             </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <IndianRupee className="h-4 w-4" />
-              Total Revenue
+        {/* Total Revenue */}
+        <Card className="relative overflow-hidden border-0 shadow-md">
+          <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-purple-700" />
+          <CardHeader className="pb-2 relative">
+            <CardTitle className="text-sm flex items-center gap-2 text-violet-100 font-medium">
+              <div className="bg-white/20 rounded-lg p-1.5">
+                <IndianRupee className="h-4 w-4 text-white" />
+              </div>
+              {t("dashboard.totalRevenue")}
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
+          <CardContent className="relative">
+            <div className="text-3xl font-bold text-white">
               ₹{Math.round(totalRevenue).toLocaleString()}
             </div>
-            <p className="text-xs text-muted-foreground">
-              {billStore.bills.length} bills
+            <p className="text-xs text-violet-200 mt-1">
+              {billStore.bills.length} {t("dashboard.bills")}
             </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Customers
+        {/* Customers */}
+        <Card className="relative overflow-hidden border-0 shadow-md">
+          <div className="absolute inset-0 bg-gradient-to-br from-pink-500 to-rose-600" />
+          <CardHeader className="pb-2 relative">
+            <CardTitle className="text-sm flex items-center gap-2 text-pink-100 font-medium">
+              <div className="bg-white/20 rounded-lg p-1.5">
+                <Users className="h-4 w-4 text-white" />
+              </div>
+              {t("dashboard.customers")}
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-600">
+          <CardContent className="relative">
+            <div className="text-3xl font-bold text-white">
               {totalCustomers}
             </div>
-            <p className="text-xs text-muted-foreground">Active customers</p>
+            <p className="text-xs text-pink-200 mt-1">
+              {t("dashboard.activeCustomers")}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -259,30 +297,46 @@ export default function Dashboard() {
       {/* Charts */}
       <div className="grid gap-4 md:grid-cols-2">
         {/* Sales Trend */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Sales Trend</CardTitle>
-            <CardDescription>Revenue over the last 7 days</CardDescription>
+        <Card className="shadow-sm border border-border/50">
+          <CardHeader className="pb-2 border-b border-border/30">
+            <div className="flex items-center gap-2">
+              <div className="bg-blue-100 dark:bg-blue-900/40 rounded-lg p-2">
+                <TrendingUp className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <CardTitle className="text-base">
+                  {t("dashboard.salesTrend")}
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  {t("dashboard.salesTrendDesc")}
+                </CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
+          <CardContent className="pt-4">
+            <ResponsiveContainer width="100%" height={260}>
               <LineChart data={salesData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip
-                  formatter={(value) => `₹${value.toLocaleString()}`}
+                  formatter={(value) => [
+                    `₹${Number(value).toLocaleString()}`,
+                    "Revenue",
+                  ]}
                   contentStyle={{
-                    backgroundColor: "#1a1a1a",
-                    border: "1px solid #666",
+                    borderRadius: "8px",
+                    border: "1px solid #e2e8f0",
+                    fontSize: 12,
                   }}
                 />
                 <Line
                   type="monotone"
                   dataKey="revenue"
                   stroke="#3b82f6"
-                  strokeWidth={2}
-                  dot={{ fill: "#3b82f6" }}
+                  strokeWidth={2.5}
+                  dot={{ fill: "#3b82f6", r: 4 }}
+                  activeDot={{ r: 6, fill: "#1d4ed8" }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -290,13 +344,24 @@ export default function Dashboard() {
         </Card>
 
         {/* Category Distribution */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Product Categories</CardTitle>
-            <CardDescription>Distribution by category</CardDescription>
+        <Card className="shadow-sm border border-border/50">
+          <CardHeader className="pb-2 border-b border-border/30">
+            <div className="flex items-center gap-2">
+              <div className="bg-purple-100 dark:bg-purple-900/40 rounded-lg p-2">
+                <Package className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div>
+                <CardTitle className="text-base">
+                  {t("dashboard.productCategories")}
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  {t("dashboard.productCategoriesDesc")}
+                </CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
+          <CardContent className="pt-4">
+            <ResponsiveContainer width="100%" height={260}>
               <PieChart>
                 <Pie
                   data={categoryData}
@@ -304,7 +369,7 @@ export default function Dashboard() {
                   cy="50%"
                   labelLine={false}
                   label={({ name, value }) => `${name}: ${value}`}
-                  outerRadius={80}
+                  outerRadius={90}
                   fill="#8884d8"
                   dataKey="value"
                 >
@@ -315,7 +380,7 @@ export default function Dashboard() {
                     />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip contentStyle={{ borderRadius: "8px", fontSize: 12 }} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
@@ -324,22 +389,26 @@ export default function Dashboard() {
 
       {/* Alerts and Quick Actions */}
       <div className="grid gap-4 md:grid-cols-2">
-        {/* Expiring Batches & Shelf Placement */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              Expiring Batches & Shelf Placement
+        {/* Expiring Batches */}
+        <Card className="shadow-sm border border-amber-200 dark:border-amber-800/50">
+          <CardHeader className="pb-2 bg-amber-50/50 dark:bg-amber-950/20 rounded-t-xl border-b border-amber-100 dark:border-amber-800/30">
+            <CardTitle className="flex items-center gap-2 text-amber-900 dark:text-amber-200">
+              <div className="bg-amber-100 dark:bg-amber-900/40 rounded-lg p-2">
+                <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              {t("dashboard.expiringBatches")}
             </CardTitle>
             <CardDescription>
-              Batches expiring within 7 days, sorted for front shelf placement
+              {t("dashboard.expiringBatchesDesc")}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             {expiringBatches.length === 0 ? (
-              <div className="flex items-center gap-2 text-sm text-green-600">
-                <CheckCircle className="h-4 w-4" />
-                No batches expiring soon
+              <div className="flex items-center gap-3 text-sm text-emerald-700 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg p-3">
+                <CheckCircle className="h-5 w-5 text-emerald-500" />
+                <span className="font-medium">
+                  {t("dashboard.noExpiringSoon")}
+                </span>
               </div>
             ) : (
               <div className="space-y-2">
@@ -358,7 +427,7 @@ export default function Dashboard() {
                     const daysLeft = Math.ceil(
                       (new Date(batch.expiry_date || "").getTime() -
                         new Date().getTime()) /
-                        (1000 * 3600 * 24)
+                        (1000 * 3600 * 24),
                     );
                     return (
                       <div
@@ -367,7 +436,7 @@ export default function Dashboard() {
                           batch.batch_number ||
                           `${batch.productId}-${batch.expiry_date || "na"}`
                         }
-                        className="flex flex-col md:flex-row justify-between items-start md:items-center text-sm border-b pb-2 mb-2"
+                        className={`flex flex-col md:flex-row justify-between items-start md:items-center text-sm rounded-lg px-3 py-2 border ${daysLeft <= 3 ? "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800/40" : "bg-amber-50/60 border-amber-100 dark:bg-amber-950/10 dark:border-amber-800/30"}`}
                       >
                         <span className="font-medium text-foreground">
                           {batch.productName}
@@ -380,15 +449,20 @@ export default function Dashboard() {
                         </span>
                         <Badge
                           variant={daysLeft <= 3 ? "destructive" : "secondary"}
-                          className="text-xs"
+                          className="text-xs font-semibold"
                         >
-                          {daysLeft} days
+                          {daysLeft} {t("dashboard.days")}
                         </Badge>
                       </div>
                     );
                   })}
                 {expiringBatches.length > 5 && (
-                  <Button variant="link" size="sm" asChild className="w-full">
+                  <Button
+                    variant="link"
+                    size="sm"
+                    asChild
+                    className="w-full text-amber-700"
+                  >
                     <Link to="/inventory">
                       View all ({expiringBatches.length})
                     </Link>
@@ -400,26 +474,54 @@ export default function Dashboard() {
         </Card>
 
         {/* Quick Actions */}
-        <Card>
-          <CardHeader>
+        <Card className="shadow-sm border border-border/50">
+          <CardHeader className="pb-2 bg-muted/30 rounded-t-xl border-b border-border/30">
             <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4" />
-              Quick Actions
+              <div className="bg-primary/10 rounded-lg p-2">
+                <TrendingUp className="h-4 w-4 text-primary" />
+              </div>
+              {t("nav.quickActions")}
             </CardTitle>
-            <CardDescription>Fast access to common tasks</CardDescription>
+            <CardDescription>{t("dashboard.quickActionsDesc")}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <Button asChild className="w-full justify-start">
-              <Link to="/inventory/add">+ Add Product</Link>
+          <CardContent className="pt-4 space-y-3">
+            <Button
+              asChild
+              className="w-full justify-start gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm h-11"
+            >
+              <Link to="/inventory/add">
+                <span className="text-xl leading-none">+</span>
+                {t("nav.addProduct")}
+              </Link>
             </Button>
-            <Button asChild variant="outline" className="w-full justify-start">
-              <Link to="/billing/new">+ Create Bill</Link>
+            <Button
+              asChild
+              className="w-full justify-start gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm h-11"
+            >
+              <Link to="/billing/new">
+                <span className="text-xl leading-none">+</span>
+                {t("dashboard.createBill")}
+              </Link>
             </Button>
-            <Button asChild variant="outline" className="w-full justify-start">
-              <Link to="/customers">+ Add Customer</Link>
+            <Button
+              asChild
+              variant="outline"
+              className="w-full justify-start gap-2 border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-300 h-10"
+            >
+              <Link to="/customers">
+                <span className="text-xl leading-none">+</span>
+                {t("dashboard.addCustomer")}
+              </Link>
             </Button>
-            <Button asChild variant="outline" className="w-full justify-start">
-              <Link to="/reports">📊 View Reports</Link>
+            <Button
+              asChild
+              variant="outline"
+              className="w-full justify-start gap-2 h-10"
+            >
+              <Link to="/reports">
+                <TrendingUp className="h-4 w-4" />
+                {t("dashboard.viewReports")}
+              </Link>
             </Button>
           </CardContent>
         </Card>
@@ -427,19 +529,24 @@ export default function Dashboard() {
 
       {/* Low Stock Alert */}
       {lowStockCount > 0 && (
-        <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-800">
-          <CardHeader>
+        <Card className="border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/30 dark:to-amber-950/20 dark:border-orange-700 shadow-sm">
+          <CardHeader className="pb-2">
             <CardTitle className="text-orange-900 dark:text-orange-200 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              {lowStockCount} Products Low on Stock
+              <div className="bg-orange-100 dark:bg-orange-900/50 rounded-lg p-2">
+                <AlertTriangle className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+              </div>
+              {lowStockCount} {t("dashboard.productsLowStock")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-orange-800 dark:text-orange-300 mb-4">
-              The following products are below their minimum stock level:
+              {t("dashboard.lowStockDesc")}
             </p>
-            <Button asChild>
-              <Link to="/inventory">Review Inventory</Link>
+            <Button
+              asChild
+              className="bg-orange-600 hover:bg-orange-700 text-white shadow-sm"
+            >
+              <Link to="/inventory">{t("dashboard.reviewInventory")}</Link>
             </Button>
           </CardContent>
         </Card>

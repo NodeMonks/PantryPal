@@ -1,4 +1,4 @@
-export type PlanTier = "starter" | "premium";
+export type PlanTier = "starter" | "premium" | "developer";
 
 export type PlanLimits = {
   tier: PlanTier;
@@ -20,6 +20,9 @@ export function normalizePlanTier(planName?: string | null): PlanTier {
   // Treat unknown/empty as starter (safer default)
   if (!raw) return "starter";
 
+  // Developer tier
+  if (raw.includes("developer") || raw.includes("dev")) return "developer";
+
   // Explicit premium mapping
   if (raw.includes("premium") || raw.includes("999")) return "premium";
 
@@ -32,6 +35,18 @@ export function normalizePlanTier(planName?: string | null): PlanTier {
 
 export function getPlanLimits(planName?: string | null): PlanLimits {
   const tier = normalizePlanTier(planName);
+
+  if (tier === "developer") {
+    return {
+      tier,
+      maxStores: Number.POSITIVE_INFINITY,
+      maxRoleUsers: {
+        adminOrOwner: Number.POSITIVE_INFINITY,
+        store_manager: Number.POSITIVE_INFINITY,
+        inventory_manager: Number.POSITIVE_INFINITY,
+      },
+    };
+  }
 
   if (tier === "starter") {
     return {

@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Card,
   CardContent,
@@ -6,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { TableSkeleton } from "@/components/ui/page-skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +30,15 @@ import { Label } from "@/components/ui/label";
 import { api, type Product } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { Link } from "react-router-dom";
-import { Plus, Search, QrCode, Trash2 } from "lucide-react";
+import {
+  Plus,
+  Search,
+  QrCode,
+  Trash2,
+  Package,
+  Tag,
+  AlertTriangle,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -50,6 +60,7 @@ import {
 
 export default function Inventory() {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
@@ -87,14 +98,14 @@ export default function Inventory() {
             console.log(`Retrying... attempt ${retryCount + 1}`);
             setTimeout(
               () => loadProducts(retryCount + 1),
-              1000 * (retryCount + 1)
+              1000 * (retryCount + 1),
             );
             return;
           }
 
           toast({
-            title: "Error",
-            description: "Failed to load products. Please refresh the page.",
+            title: t("common.error"),
+            description: t("inventory.failedLoad"),
             variant: "destructive",
           });
         }
@@ -105,7 +116,7 @@ export default function Inventory() {
       }
       return () => abortController.abort();
     },
-    [toast]
+    [toast],
   );
 
   // Load products on mount with cleanup
@@ -141,7 +152,7 @@ export default function Inventory() {
     // Apply category filter
     if (categoryFilter !== "all") {
       filtered = filtered.filter(
-        (product: Product) => (product.category || "") === categoryFilter
+        (product: Product) => (product.category || "") === categoryFilter,
       );
     }
 
@@ -173,11 +184,14 @@ export default function Inventory() {
     const stock = product.quantity_in_stock || 0;
     const minLevel = product.min_stock_level || 0;
     if (stock === 0) {
-      return { label: "Out of Stock", variant: "destructive" as const };
+      return {
+        label: t("inventory.outOfStock"),
+        variant: "destructive" as const,
+      };
     } else if (stock <= minLevel) {
-      return { label: "Low Stock", variant: "secondary" as const };
+      return { label: t("inventory.lowStock"), variant: "secondary" as const };
     } else {
-      return { label: "In Stock", variant: "default" as const };
+      return { label: t("inventory.inStock"), variant: "default" as const };
     }
   };
 
@@ -187,15 +201,21 @@ export default function Inventory() {
     const expiry = new Date(expiryDate);
     const now = new Date();
     const daysDiff = Math.ceil(
-      (expiry.getTime() - now.getTime()) / (1000 * 3600 * 24)
+      (expiry.getTime() - now.getTime()) / (1000 * 3600 * 24),
     );
 
     if (daysDiff < 0) {
-      return { label: "Expired", variant: "destructive" as const };
+      return { label: t("inventory.expired"), variant: "destructive" as const };
     } else if (daysDiff <= 7) {
-      return { label: `${daysDiff} days left`, variant: "secondary" as const };
+      return {
+        label: t("inventory.daysLeft", { count: daysDiff }),
+        variant: "secondary" as const,
+      };
     } else if (daysDiff <= 30) {
-      return { label: `${daysDiff} days left`, variant: "outline" as const };
+      return {
+        label: t("inventory.daysLeft", { count: daysDiff }),
+        variant: "outline" as const,
+      };
     }
     return null;
   };
@@ -214,7 +234,7 @@ export default function Inventory() {
           if (response.status === 429 && retryCount < 3) {
             // Rate limited, retry with exponential backoff
             await new Promise((resolve) =>
-              setTimeout(resolve, 1000 * Math.pow(2, retryCount))
+              setTimeout(resolve, 1000 * Math.pow(2, retryCount)),
             );
             return generateQRCode(productId, retryCount + 1);
           }
@@ -232,8 +252,8 @@ export default function Inventory() {
                   qr_code: data.qr_code,
                   qr_code_image: data.qr_code_image,
                 }
-              : p
-          )
+              : p,
+          ),
         );
 
         // Update selected product if viewing
@@ -245,13 +265,13 @@ export default function Inventory() {
                   qr_code: data.qr_code,
                   qr_code_image: data.qr_code_image,
                 }
-              : null
+              : null,
           );
           setQrDialogOpen(true);
         }
 
         toast({
-          title: "QR Code Generated",
+          title: t("inventory.qrCodeGenerated"),
           description: `QR code generated for ${
             data.product?.name || "product"
           }`,
@@ -259,30 +279,28 @@ export default function Inventory() {
       } catch (error) {
         console.error(`Error generating QR code for ${productId}:`, error);
         toast({
-          title: "Error",
+          title: t("common.error"),
           description:
-            error instanceof Error
-              ? error.message
-              : "Failed to generate QR code",
+            error instanceof Error ? error.message : t("inventory.failedQr"),
           variant: "destructive",
         });
       } finally {
         setGeneratingId(null);
       }
     },
-    [selectedProduct, toast]
+    [selectedProduct, toast],
   );
 
   // Batch generate QR codes for products without them - production optimized
   const batchGenerateQRCodes = useCallback(async () => {
     const productsNeedingQR = filteredProducts.filter(
-      (p: Product) => !p.qr_code_image
+      (p: Product) => !p.qr_code_image,
     );
 
     if (productsNeedingQR.length === 0) {
       toast({
-        title: "Info",
-        description: "All products already have QR codes",
+        title: t("common.info"),
+        description: t("inventory.allHaveQr"),
       });
       return;
     }
@@ -297,12 +315,12 @@ export default function Inventory() {
     for (let i = 0; i < productsNeedingQR.length; i += batchSize) {
       const batch = productsNeedingQR.slice(
         i,
-        Math.min(i + batchSize, productsNeedingQR.length)
+        Math.min(i + batchSize, productsNeedingQR.length),
       );
 
       // Process batch in parallel
       const batchResults = await Promise.allSettled(
-        batch.map((product) => generateQRCode(product.id))
+        batch.map((product) => generateQRCode(product.id)),
       );
 
       // Track results
@@ -328,11 +346,17 @@ export default function Inventory() {
 
     // Final results notification
     toast({
-      title: results.failed === 0 ? "Success" : "Partial Complete",
+      title:
+        results.failed === 0
+          ? t("common.success")
+          : t("inventory.partialComplete"),
       description:
         results.failed === 0
-          ? `Generated QR codes for all ${results.success} products`
-          : `Generated ${results.success} QR codes, ${results.failed} failed. Retry manually for failed items.`,
+          ? t("inventory.generatedAllQr", { count: results.success })
+          : t("inventory.generatedPartialQr", {
+              success: results.success,
+              failed: results.failed,
+            }),
       variant: results.failed === 0 ? "default" : "destructive",
     });
 
@@ -350,7 +374,7 @@ export default function Inventory() {
           {
             method: "POST",
             credentials: "include",
-          }
+          },
         );
 
         if (!response.ok) {
@@ -362,26 +386,26 @@ export default function Inventory() {
         // Update local product data
         setProducts((prev) =>
           prev.map((p) =>
-            p.id === productId ? { ...p, barcode: data.barcode } : p
-          )
+            p.id === productId ? { ...p, barcode: data.barcode } : p,
+          ),
         );
 
         toast({
-          title: "Barcode Generated",
+          title: t("inventory.barcodeGenerated"),
           description: `Barcode: ${data.barcode}`,
         });
       } catch (error) {
         console.error(`Error generating barcode for ${productId}:`, error);
         toast({
-          title: "Error",
-          description: "Failed to generate barcode",
+          title: t("common.error"),
+          description: t("inventory.failedBarcode"),
           variant: "destructive",
         });
       } finally {
         setGeneratingId(null);
       }
     },
-    [toast]
+    [toast],
   );
 
   // Batch generate both QR and barcodes - optimized for scale
@@ -391,8 +415,8 @@ export default function Inventory() {
 
     if (needsQR.length === 0 && needsBarcode.length === 0) {
       toast({
-        title: "Info",
-        description: "All products already have QR codes and barcodes",
+        title: t("common.info"),
+        description: t("inventory.allHaveCodes"),
       });
       return;
     }
@@ -418,8 +442,8 @@ export default function Inventory() {
     }
 
     toast({
-      title: "Batch Generation Complete",
-      description: `Generated codes for ${total} items`,
+      title: t("inventory.batchComplete"),
+      description: t("inventory.generatedCodes", { count: total }),
     });
 
     setBatchGenerating(false);
@@ -435,7 +459,7 @@ export default function Inventory() {
         void generateQRCode(product.id);
       }
     },
-    [generateQRCode]
+    [generateQRCode],
   );
 
   const handleDeleteClick = (product: Product) => {
@@ -457,14 +481,14 @@ export default function Inventory() {
       await api.deleteProduct(productId);
 
       toast({
-        title: "Success",
-        description: "Product deleted successfully",
+        title: t("common.success"),
+        description: t("inventory.deleteSuccess"),
       });
     } catch (error) {
       console.error("Error deleting product:", error);
       toast({
-        title: "Error",
-        description: "Failed to delete product. Refreshing...",
+        title: t("common.error"),
+        description: t("inventory.deleteFailed"),
         variant: "destructive",
       });
       // Reload on error to sync state
@@ -474,7 +498,7 @@ export default function Inventory() {
 
   const categories = useMemo(() => {
     const uniqueCategories = new Set(
-      products.map((p: Product) => p.category).filter(Boolean)
+      products.map((p: Product) => p.category).filter(Boolean),
     );
     return Array.from(uniqueCategories).sort();
   }, [products]);
@@ -486,7 +510,7 @@ export default function Inventory() {
       missingBarcode: filteredProducts.filter((p: Product) => !p.barcode)
         .length,
     }),
-    [filteredProducts]
+    [filteredProducts],
   );
 
   return (
@@ -494,42 +518,46 @@ export default function Inventory() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground">
-            Inventory Management
+            {t("inventory.title")}
           </h1>
-          <p className="text-muted-foreground">
-            Manage your product inventory and stock levels
-          </p>
+          <p className="text-muted-foreground">{t("inventory.subtitle")}</p>
         </div>
-        <Button asChild>
+        <Button
+          asChild
+          className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm gap-2 h-11"
+        >
           <Link to="/inventory/add">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Product
+            <Plus className="h-4 w-4" />
+            {t("inventory.addProduct")}
           </Link>
         </Button>
       </div>
 
-      {/* Search and Stats */}
+      {/* Search and Filters */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="md:col-span-4">
-          <CardHeader>
-            <CardTitle>Search & Filter Products</CardTitle>
+        <Card className="md:col-span-4 border border-border/50 shadow-sm bg-muted/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground font-medium">
+              <Search className="h-4 w-4" />
+              {t("inventory.searchFilter")}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-4">
               <div className="space-y-2">
-                <Label>Search</Label>
+                <Label>{t("common.search")}</Label>
                 <div className="relative">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Search by name, category, or brand..."
-                    className="pl-10"
+                    placeholder={t("inventory.searchPlaceholder")}
+                    className="pl-10 bg-background"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Category</Label>
+                <Label>{t("inventory.category")}</Label>
                 <Select
                   value={categoryFilter}
                   onValueChange={setCategoryFilter}
@@ -538,7 +566,9 @@ export default function Inventory() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="all">
+                      {t("inventory.allCategories")}
+                    </SelectItem>
                     {categories.map((cat: string) => (
                       <SelectItem key={cat} value={cat}>
                         {cat}
@@ -548,24 +578,32 @@ export default function Inventory() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Sort By</Label>
+                <Label>{t("inventory.sortBy")}</Label>
                 <Select value={sortBy} onValueChange={setSortBy}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="name">Name</SelectItem>
-                    <SelectItem value="category">Category</SelectItem>
-                    <SelectItem value="quantity_in_stock">
-                      Stock Quantity
+                    <SelectItem value="name">
+                      {t("inventory.sortName")}
                     </SelectItem>
-                    <SelectItem value="mrp">Price (MRP)</SelectItem>
-                    <SelectItem value="expiry_date">Expiry Date</SelectItem>
+                    <SelectItem value="category">
+                      {t("inventory.category")}
+                    </SelectItem>
+                    <SelectItem value="quantity_in_stock">
+                      {t("inventory.sortStockQty")}
+                    </SelectItem>
+                    <SelectItem value="mrp">
+                      {t("inventory.sortPriceMrp")}
+                    </SelectItem>
+                    <SelectItem value="expiry_date">
+                      {t("inventory.sortExpiry")}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Order</Label>
+                <Label>{t("inventory.order")}</Label>
                 <Select
                   value={sortOrder}
                   onValueChange={(val) => setSortOrder(val as "asc" | "desc")}
@@ -574,8 +612,12 @@ export default function Inventory() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="asc">Ascending</SelectItem>
-                    <SelectItem value="desc">Descending</SelectItem>
+                    <SelectItem value="asc">
+                      {t("inventory.ascending")}
+                    </SelectItem>
+                    <SelectItem value="desc">
+                      {t("inventory.descending")}
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -586,104 +628,204 @@ export default function Inventory() {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Total Products</CardTitle>
+        {/* Total Products */}
+        <Card className="relative overflow-hidden border-0 shadow-md">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-blue-700" />
+          <CardHeader className="pb-2 relative">
+            <CardTitle className="text-sm flex items-center gap-2 text-blue-100 font-medium">
+              <div className="bg-white/20 rounded-lg p-1.5">
+                <Package className="h-4 w-4 text-white" />
+              </div>
+              {t("inventory.totalProducts")}
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{products.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Showing {filteredProducts.length} filtered
+          <CardContent className="relative">
+            <div className="text-3xl font-bold text-white">
+              {products.length}
+            </div>
+            <p className="text-xs text-blue-200 mt-1">
+              {t("inventory.showingFiltered", {
+                count: filteredProducts.length,
+              })}
             </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Categories</CardTitle>
+        {/* Categories */}
+        <Card className="relative overflow-hidden border-0 shadow-md">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500 to-purple-600" />
+          <CardHeader className="pb-2 relative">
+            <CardTitle className="text-sm flex items-center gap-2 text-indigo-100 font-medium">
+              <div className="bg-white/20 rounded-lg p-1.5">
+                <Tag className="h-4 w-4 text-white" />
+              </div>
+              {t("inventory.categories")}
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{categories.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Unique categories
+          <CardContent className="relative">
+            <div className="text-3xl font-bold text-white">
+              {categories.length}
+            </div>
+            <p className="text-xs text-indigo-200 mt-1">
+              {t("inventory.uniqueCategories")}
             </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Low Stock Items</CardTitle>
+        {/* Low Stock */}
+        <Card className="relative overflow-hidden border-0 shadow-md">
+          <div
+            className={`absolute inset-0 ${
+              products.filter(
+                (p: Product) =>
+                  (p.quantity_in_stock || 0) <= (p.min_stock_level || 0),
+              ).length > 0
+                ? "bg-gradient-to-br from-orange-500 to-red-600"
+                : "bg-gradient-to-br from-emerald-500 to-emerald-700"
+            }`}
+          />
+          <CardHeader className="pb-2 relative">
+            <CardTitle className="text-sm flex items-center gap-2 text-orange-100 font-medium">
+              <div className="bg-white/20 rounded-lg p-1.5">
+                <AlertTriangle className="h-4 w-4 text-white" />
+              </div>
+              {t("inventory.lowStockItems")}
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">
+          <CardContent className="relative">
+            <div className="text-3xl font-bold text-white">
               {
                 products.filter(
                   (p: Product) =>
-                    (p.quantity_in_stock || 0) <= (p.min_stock_level || 0)
+                    (p.quantity_in_stock || 0) <= (p.min_stock_level || 0),
                 ).length
               }
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Need restock</p>
+            <p className="text-xs text-orange-100 mt-1">
+              {t("inventory.needRestock")}
+            </p>
           </CardContent>
         </Card>
       </div>
 
       {/* Products Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Products</CardTitle>
-          <CardDescription>
-            {filteredProducts.length} of {products.length} products
-          </CardDescription>
+      <Card className="border border-border/50 shadow-sm">
+        <CardHeader className="border-b border-border/30 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="bg-blue-100 dark:bg-blue-900/40 rounded-lg p-2">
+              <Package className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <CardTitle className="text-base">
+                {t("inventory.products")}
+              </CardTitle>
+              <CardDescription className="text-xs">
+                {t("inventory.showing", {
+                  filtered: filteredProducts.length,
+                  total: products.length,
+                })}
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="text-center py-8">Loading products...</div>
+            <TableSkeleton
+              rows={7}
+              headers={[
+                t("inventory.product"),
+                t("inventory.category"),
+                t("inventory.stock"),
+                t("inventory.priceMrp"),
+                t("inventory.expiry"),
+                t("common.actions"),
+              ]}
+            />
           ) : filteredProducts.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               {searchTerm
-                ? "No products found matching your search."
-                : "No products in inventory."}
+                ? t("inventory.noProductsFound")
+                : t("inventory.noProducts")}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Stock</TableHead>
-                    <TableHead>Price (MRP)</TableHead>
-                    <TableHead>Expiry</TableHead>
-                    <TableHead>Actions</TableHead>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableHead className="font-semibold">
+                      {t("inventory.product")}
+                    </TableHead>
+                    <TableHead className="font-semibold">
+                      {t("inventory.category")}
+                    </TableHead>
+                    <TableHead className="font-semibold">
+                      {t("inventory.stock")}
+                    </TableHead>
+                    <TableHead className="font-semibold">
+                      {t("inventory.priceMrp")}
+                    </TableHead>
+                    <TableHead className="font-semibold">
+                      {t("inventory.expiry")}
+                    </TableHead>
+                    <TableHead className="font-semibold">
+                      {t("common.actions")}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredProducts.map((product: Product) => {
+                  {filteredProducts.map((product: Product, idx: number) => {
                     const stockStatus = getStockStatus(product);
                     const expiryStatus = getExpiryStatus(
-                      product.expiry_date || undefined
+                      product.expiry_date || undefined,
                     );
+                    const isOutOfStock = (product.quantity_in_stock || 0) === 0;
+                    const isLowStock =
+                      !isOutOfStock &&
+                      (product.quantity_in_stock || 0) <=
+                        (product.min_stock_level || 0);
 
                     return (
-                      <TableRow key={product.id}>
+                      <TableRow
+                        key={product.id}
+                        className={`transition-colors ${
+                          isOutOfStock
+                            ? "bg-red-50/50 hover:bg-red-50 dark:bg-red-950/10 dark:hover:bg-red-950/20 border-l-2 border-l-red-400"
+                            : isLowStock
+                              ? "bg-orange-50/40 hover:bg-orange-50 dark:bg-orange-950/10 dark:hover:bg-orange-950/20 border-l-2 border-l-orange-400"
+                              : idx % 2 === 0
+                                ? "hover:bg-muted/30"
+                                : "bg-muted/10 hover:bg-muted/30"
+                        }`}
+                      >
                         <TableCell>
                           <div>
-                            <div className="font-medium">{product.name}</div>
+                            <div className="font-semibold text-foreground">
+                              {product.name}
+                            </div>
                             {product.brand && (
-                              <div className="text-sm text-muted-foreground">
+                              <div className="text-xs text-muted-foreground">
                                 {product.brand}
                               </div>
                             )}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">{product.category}</Badge>
+                          <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-300 hover:bg-indigo-100">
+                            {product.category}
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
-                              <span>
+                              <span
+                                className={`font-medium ${
+                                  isOutOfStock
+                                    ? "text-red-600"
+                                    : isLowStock
+                                      ? "text-orange-600"
+                                      : "text-emerald-700 dark:text-emerald-400"
+                                }`}
+                              >
                                 {product.quantity_in_stock} {product.unit}
                               </span>
                               <Badge
@@ -694,15 +836,20 @@ export default function Inventory() {
                               </Badge>
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              Min: {product.min_stock_level} {product.unit}
+                              {t("inventory.minStock", {
+                                min: product.min_stock_level,
+                                unit: product.unit,
+                              })}
                             </div>
                           </div>
                         </TableCell>
                         <TableCell>
                           <div>
-                            <div className="font-medium">₹{product.mrp}</div>
-                            <div className="text-sm text-muted-foreground">
-                              Cost: ₹{product.buying_cost}
+                            <div className="font-semibold text-blue-700 dark:text-blue-400">
+                              ₹{product.mrp}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {t("inventory.cost")}: ₹{product.buying_cost}
                             </div>
                           </div>
                         </TableCell>
@@ -711,7 +858,7 @@ export default function Inventory() {
                             <div className="space-y-1">
                               <div className="text-sm">
                                 {new Date(
-                                  product.expiry_date
+                                  product.expiry_date,
                                 ).toLocaleDateString("en-IN")}
                               </div>
                               {expiryStatus && (
@@ -724,37 +871,43 @@ export default function Inventory() {
                               )}
                             </div>
                           ) : (
-                            <span className="text-muted-foreground">
-                              No expiry
+                            <span className="text-muted-foreground text-sm">
+                              {t("inventory.noExpiry")}
                             </span>
                           )}
                         </TableCell>
                         <TableCell>
-                          <div className="flex gap-2">
+                          <div className="flex gap-1.5">
                             <Button
                               variant="outline"
                               size="sm"
+                              className="h-8 w-8 p-0 border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-300"
                               onClick={() => viewQRCode(product)}
                               title={
                                 product.qr_code_image
-                                  ? "View QR Code"
-                                  : "Generate QR Code"
+                                  ? t("inventory.viewQr")
+                                  : t("inventory.generateQr")
                               }
                             >
-                              <QrCode className="h-4 w-4" />
+                              <QrCode className="h-3.5 w-3.5" />
                             </Button>
-                            <Button variant="outline" size="sm" asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              asChild
+                              className="h-8 border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300"
+                            >
                               <Link to={`/inventory/edit/${product.id}`}>
-                                Edit
+                                {t("common.edit")}
                               </Link>
                             </Button>
                             <Button
                               variant="outline"
                               size="sm"
+                              className="h-8 w-8 p-0 text-red-500 border-red-200 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:hover:bg-red-950"
                               onClick={() => handleDeleteClick(product)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
                         </TableCell>
@@ -772,20 +925,22 @@ export default function Inventory() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Product</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t("inventory.deleteConfirmTitle")}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete{" "}
-              <strong>{productToDelete?.name}</strong>? This action cannot be
-              undone.
+              {t("inventory.deleteConfirmDesc", {
+                name: productToDelete?.name ?? "",
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConfirm}
               className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
             >
-              Delete
+              {t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -795,10 +950,12 @@ export default function Inventory() {
       <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>QR Code for {selectedProduct?.name}</DialogTitle>
-            <DialogDescription>
-              Scan this QR code to quickly add this product to bills
-            </DialogDescription>
+            <DialogTitle>
+              {t("inventory.qrDialogTitle", {
+                name: selectedProduct?.name ?? "",
+              })}
+            </DialogTitle>
+            <DialogDescription>{t("inventory.qrDialogDesc")}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center space-y-4 py-4">
             {selectedProduct?.qr_code_image ? (
@@ -810,10 +967,15 @@ export default function Inventory() {
                 />
                 <div className="text-sm text-muted-foreground text-center space-y-1">
                   <div>
-                    QR Code: {selectedProduct.qr_code || selectedProduct.id}
+                    {t("inventory.qrCode")}:{" "}
+                    {selectedProduct.qr_code || selectedProduct.id}
                   </div>
-                  <div>Product: {selectedProduct.name}</div>
-                  <div>Price: ₹{selectedProduct.mrp}</div>
+                  <div>
+                    {t("inventory.product")}: {selectedProduct.name}
+                  </div>
+                  <div>
+                    {t("inventory.price")}: ₹{selectedProduct.mrp}
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -826,16 +988,16 @@ export default function Inventory() {
                       link.click();
                     }}
                   >
-                    Download
+                    {t("common.download")}
                   </Button>
                   <Button variant="outline" onClick={() => window.print()}>
-                    Print
+                    {t("common.print")}
                   </Button>
                 </div>
               </>
             ) : (
               <div className="text-center text-muted-foreground">
-                No QR code generated yet. Click Generate to create one.
+                {t("inventory.noQrYet")}
               </div>
             )}
           </div>

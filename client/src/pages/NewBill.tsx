@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Card,
   CardContent,
@@ -58,6 +59,7 @@ interface BillItem {
 }
 
 export default function NewBill() {
+  const { t } = useTranslation();
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [billItems, setBillItems] = useState<BillItem[]>([]);
@@ -120,14 +122,14 @@ export default function NewBill() {
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (product.brand &&
-        product.brand.toLowerCase().includes(searchTerm.toLowerCase()))
+        product.brand.toLowerCase().includes(searchTerm.toLowerCase())),
   );
 
   // Add product to bill, with batch selection for perishable items
   const addProductToBill = (
     product: Product,
     quantity: number = 1,
-    batchId?: string
+    batchId?: string,
   ) => {
     // If perishable (has expiry), select batch
     if (
@@ -162,7 +164,7 @@ export default function NewBill() {
     }
     // Non-perishable: add as usual
     const existingItem = billItems.find(
-      (item) => item.product.id === product.id
+      (item) => item.product.id === product.id,
     );
     if (existingItem) {
       updateItemQuantity(product.id, existingItem.quantity + quantity);
@@ -194,13 +196,13 @@ export default function NewBill() {
           return { ...item, quantity: newQuantity, total_price };
         }
         return item;
-      })
+      }),
     );
   };
 
   const removeItemFromBill = (productId: string) => {
     const existingItem = billItems.find(
-      (item) => item.product.id === productId
+      (item) => item.product.id === productId,
     );
 
     if (existingItem && existingItem.quantity > 1) {
@@ -209,7 +211,7 @@ export default function NewBill() {
     } else {
       // Remove item completely if quantity is 1 or less
       setBillItems((prev) =>
-        prev.filter((item) => item.product.id !== productId)
+        prev.filter((item) => item.product.id !== productId),
       );
     }
   };
@@ -237,7 +239,7 @@ export default function NewBill() {
           returnDetailedScanResult: true,
           highlightScanRegion: true,
           highlightCodeOutline: true,
-        }
+        },
       );
 
       await qrScanner.start();
@@ -280,7 +282,7 @@ export default function NewBill() {
       let batchId: string | undefined;
       if (parsed && parsed.type === "pantry_pal_product" && parsed.id) {
         product = products.find(
-          (p) => p.barcode === parsed.id || p.id === parsed.id
+          (p) => p.barcode === parsed.id || p.id === parsed.id,
         );
         batchId = parsed.batch_id;
       } else {
@@ -384,9 +386,9 @@ export default function NewBill() {
         </Button>
         <div>
           <h1 className="text-3xl font-bold text-foreground">
-            Create New Bill
+            {t("newBill.title")}
           </h1>
-          <p className="text-muted-foreground">Add items and generate bill</p>
+          <p className="text-muted-foreground">{t("newBill.subtitle")}</p>
         </div>
       </div>
 
@@ -403,10 +405,10 @@ export default function NewBill() {
             <CardContent className="space-y-4">
               <div className="flex gap-2">
                 <div className="flex-1 space-y-2">
-                  <Label htmlFor="search">Search Products</Label>
+                  <Label htmlFor="search">{t("newBill.searchProducts")}</Label>
                   <Input
                     id="search"
-                    placeholder="Search by name, category, or brand..."
+                    placeholder={t("newBill.searchPlaceholder")}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -421,9 +423,9 @@ export default function NewBill() {
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-md">
                       <DialogHeader>
-                        <DialogTitle>Scan QR Code</DialogTitle>
+                        <DialogTitle>{t("newBill.scannerOpen")}</DialogTitle>
                         <DialogDescription>
-                          Scan a product QR code to add it to the bill
+                          {t("qrScanner.pointCamera")}
                         </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4">
@@ -444,7 +446,7 @@ export default function NewBill() {
                                 className="mx-auto"
                               >
                                 <Play className="h-4 w-4 mr-2" />
-                                Start Camera
+                                {t("newBill.startScanner")}
                               </Button>
                             </div>
                           )}
@@ -456,7 +458,7 @@ export default function NewBill() {
                                 size="sm"
                               >
                                 <Square className="h-4 w-4 mr-2" />
-                                Stop
+                                {t("newBill.stopScanner")}
                               </Button>
                             </div>
                           )}
@@ -510,10 +512,12 @@ export default function NewBill() {
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="customer">Customer (Optional)</Label>
+                  <Label htmlFor="customer">
+                    {t("newBill.selectCustomer")}
+                  </Label>
                   <Select onValueChange={setSelectedCustomer}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select customer" />
+                      <SelectValue placeholder={t("quickPos.selectCustomer")} />
                     </SelectTrigger>
                     <SelectContent>
                       {customers.map((customer) => (
@@ -525,15 +529,15 @@ export default function NewBill() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="payment">Payment Method</Label>
+                  <Label htmlFor="payment">{t("newBill.paymentMethod")}</Label>
                   <Select onValueChange={setPaymentMethod} defaultValue="cash">
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="cash">Cash</SelectItem>
-                      <SelectItem value="card">Card</SelectItem>
-                      <SelectItem value="upi">UPI</SelectItem>
+                      <SelectItem value="cash">{t("newBill.cash")}</SelectItem>
+                      <SelectItem value="card">{t("newBill.card")}</SelectItem>
+                      <SelectItem value="upi">{t("newBill.upi")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -541,20 +545,20 @@ export default function NewBill() {
 
               {/* Bill Items */}
               <div className="space-y-4">
-                <Label>Items in Bill</Label>
+                <Label>{t("newBill.billItems")}</Label>
                 {billItems.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
-                    No items added yet
+                    {t("newBill.noBillItems")}
                   </div>
                 ) : (
                   <div className="border rounded-lg">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Product</TableHead>
-                          <TableHead>Qty</TableHead>
-                          <TableHead>Price</TableHead>
-                          <TableHead>Total</TableHead>
+                          <TableHead>{t("newBill.product")}</TableHead>
+                          <TableHead>{t("newBill.qty")}</TableHead>
+                          <TableHead>{t("newBill.unitPrice")}</TableHead>
+                          <TableHead>{t("newBill.total")}</TableHead>
                           <TableHead></TableHead>
                         </TableRow>
                       </TableHeader>
@@ -577,7 +581,7 @@ export default function NewBill() {
                                 onChange={(e) =>
                                   updateItemQuantity(
                                     item.product.id,
-                                    parseInt(e.target.value) || 0
+                                    parseInt(e.target.value) || 0,
                                   )
                                 }
                                 className="w-20"
@@ -614,7 +618,7 @@ export default function NewBill() {
                   <Separator />
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="discount">Discount (₹)</Label>
+                      <Label htmlFor="discount">{t("newBill.discount")}</Label>
                       <Input
                         id="discount"
                         type="number"
@@ -626,7 +630,7 @@ export default function NewBill() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="tax">Tax (₹)</Label>
+                      <Label htmlFor="tax">{t("newBill.tax")}</Label>
                       <Input
                         id="tax"
                         type="number"
@@ -641,7 +645,7 @@ export default function NewBill() {
 
                   <div className="space-y-2 p-4 bg-muted rounded-lg">
                     <div className="flex justify-between">
-                      <span>Subtotal:</span>
+                      <span>{t("newBill.subtotal")}:</span>
                       <span>₹{calculateSubtotal().toLocaleString()}</span>
                     </div>
                     {discountAmount > 0 && (
@@ -658,7 +662,7 @@ export default function NewBill() {
                     )}
                     <Separator />
                     <div className="flex justify-between font-bold text-lg">
-                      <span>Total:</span>
+                      <span>{t("newBill.grandTotal")}:</span>
                       <span>₹{calculateTotal().toLocaleString()}</span>
                     </div>
                   </div>
@@ -669,7 +673,9 @@ export default function NewBill() {
                       disabled={isSubmitting}
                       className="flex-1"
                     >
-                      {isSubmitting ? "Creating..." : "Generate Bill"}
+                      {isSubmitting
+                        ? t("newBill.creating")
+                        : t("newBill.createBill")}
                     </Button>
                     <Button variant="outline" asChild>
                       <Link to="/billing">Cancel</Link>

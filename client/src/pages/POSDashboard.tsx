@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -75,6 +76,7 @@ interface POSMetrics {
  * - Hourly sales trends
  */
 export default function POSDashboard() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [queueStats, setQueueStats] = useState({
@@ -150,24 +152,26 @@ export default function POSDashboard() {
             POS Dashboard
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Real-time sales and cashier metrics
+            {t("posDashboard.subtitle")}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <div className="text-sm text-gray-500">Current Time</div>
+            <div className="text-sm text-gray-500">
+              {t("posDashboard.currentTime")}
+            </div>
             <div className="text-2xl font-bold">{formatTime(currentTime)}</div>
           </div>
           <Button onClick={() => refetch()} variant="outline" size="sm">
             <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
+            {t("posDashboard.refresh")}
           </Button>
           <Button
             onClick={() => navigate("/quick-pos")}
             className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
           >
             <FastForward className="h-4 w-4 mr-2" />
-            Open POS
+            {t("posDashboard.openPos")}
           </Button>
         </div>
       </div>
@@ -178,7 +182,7 @@ export default function POSDashboard() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
               <IndianRupee className="h-4 w-4" />
-              Today's Sales
+              {t("posDashboard.todaySales")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -195,7 +199,7 @@ export default function POSDashboard() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
               <Receipt className="h-4 w-4" />
-              Avg Bill Value
+              {t("posDashboard.avgBillValue")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -204,7 +208,9 @@ export default function POSDashboard() {
                 ? "..."
                 : formatCurrency(metrics?.averageBillValue || 0)}
             </div>
-            <p className="text-xs text-gray-500 mt-1">Per transaction</p>
+            <p className="text-xs text-gray-500 mt-1">
+              {t("posDashboard.perTransaction")}
+            </p>
           </CardContent>
         </Card>
 
@@ -212,12 +218,14 @@ export default function POSDashboard() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
               <Clock className="h-4 w-4" />
-              Current Shift
+              {t("posDashboard.currentShift")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">
-              {metrics?.currentShift ? `${shiftDuration}m` : "No Shift"}
+              {metrics?.currentShift
+                ? `${shiftDuration}m`
+                : t("posDashboard.noShift")}
             </div>
             <p className="text-xs text-gray-500 mt-1">
               {metrics?.currentShift
@@ -231,7 +239,7 @@ export default function POSDashboard() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
               <AlertCircle className="h-4 w-4" />
-              Offline Queue
+              {t("posDashboard.offlineQueue")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -242,7 +250,7 @@ export default function POSDashboard() {
               {queueStats.failed > 0 && (
                 <span className="text-red-500">{queueStats.failed} failed</span>
               )}
-              {queueStats.failed === 0 && "All synced"}
+              {queueStats.failed === 0 && t("posDashboard.allSynced")}
             </p>
           </CardContent>
         </Card>
@@ -255,9 +263,11 @@ export default function POSDashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5" />
-              Top Selling Today
+              {t("posDashboard.topSellingToday")}
             </CardTitle>
-            <CardDescription>Best performing products</CardDescription>
+            <CardDescription>
+              {t("posDashboard.bestPerforming")}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -277,7 +287,7 @@ export default function POSDashboard() {
                       <div>
                         <p className="font-semibold">{product.name}</p>
                         <p className="text-sm text-gray-500">
-                          {product.quantity} units sold
+                          {product.quantity} {t("posDashboard.unitsSold")}
                         </p>
                       </div>
                     </div>
@@ -291,7 +301,7 @@ export default function POSDashboard() {
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500">
-                No sales yet today
+                {t("posDashboard.noSalesToday")}
               </div>
             )}
           </CardContent>
@@ -302,9 +312,11 @@ export default function POSDashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <DollarSign className="h-5 w-5" />
-              Payment Methods
+              {t("posDashboard.paymentMethods")}
             </CardTitle>
-            <CardDescription>Today's breakdown</CardDescription>
+            <CardDescription>
+              {t("posDashboard.todayBreakdown")}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -352,7 +364,7 @@ export default function POSDashboard() {
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500">
-                No payments yet today
+                {t("posDashboard.noPaymentsToday")}
               </div>
             )}
           </CardContent>
@@ -362,8 +374,8 @@ export default function POSDashboard() {
       {/* Quick Actions */}
       <Card>
         <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Common POS operations</CardDescription>
+          <CardTitle>{t("posDashboard.quickActions")}</CardTitle>
+          <CardDescription>{t("posDashboard.posOperations")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -374,7 +386,7 @@ export default function POSDashboard() {
             >
               <div className="text-center">
                 <FastForward className="h-6 w-6 mx-auto mb-2" />
-                <div className="text-sm">New Sale</div>
+                <div className="text-sm">{t("posDashboard.newSale")}</div>
               </div>
             </Button>
             <Button
@@ -384,7 +396,7 @@ export default function POSDashboard() {
             >
               <div className="text-center">
                 <Receipt className="h-6 w-6 mx-auto mb-2" />
-                <div className="text-sm">View Bills</div>
+                <div className="text-sm">{t("posDashboard.viewBills")}</div>
               </div>
             </Button>
             <Button
@@ -394,7 +406,7 @@ export default function POSDashboard() {
             >
               <div className="text-center">
                 <User className="h-6 w-6 mx-auto mb-2" />
-                <div className="text-sm">Customers</div>
+                <div className="text-sm">{t("posDashboard.customers")}</div>
               </div>
             </Button>
             <Button
@@ -404,7 +416,7 @@ export default function POSDashboard() {
             >
               <div className="text-center">
                 <Package className="h-6 w-6 mx-auto mb-2" />
-                <div className="text-sm">Inventory</div>
+                <div className="text-sm">{t("posDashboard.inventory")}</div>
               </div>
             </Button>
           </div>

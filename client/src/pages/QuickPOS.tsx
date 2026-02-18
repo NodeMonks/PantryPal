@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -72,6 +73,7 @@ interface Customer {
  * - Sub-30 second checkout goal
  */
 export default function QuickPOS() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -484,7 +486,7 @@ export default function QuickPOS() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <FastForward className="h-6 w-6 text-orange-600" />
-            <h1 className="text-2xl font-bold">Quick POS</h1>
+            <h1 className="text-2xl font-bold">{t("quickPos.title")}</h1>
             <Badge
               variant={isOnline ? "default" : "destructive"}
               className="ml-2"
@@ -494,7 +496,7 @@ export default function QuickPOS() {
               ) : (
                 <WifiOff className="h-3 w-3 mr-1" />
               )}
-              {isOnline ? "Online" : "Offline"}
+              {isOnline ? t("quickPos.online") : t("quickPos.offline")}
             </Badge>
           </div>
 
@@ -524,7 +526,7 @@ export default function QuickPOS() {
               <Input
                 ref={searchRef}
                 type="text"
-                placeholder="Search products by name, barcode, or scan with scanner (press Enter)..."
+                placeholder={t("quickPos.searchProduct")}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
@@ -537,7 +539,9 @@ export default function QuickPOS() {
           {/* Search Results */}
           <div className="flex-1 overflow-y-auto p-4">
             {isSearching ? (
-              <div className="text-center py-8 text-gray-500">Searching...</div>
+              <div className="text-center py-8 text-gray-500">
+                {t("common.searching", "Searching...")}
+              </div>
             ) : searchResults.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {searchResults.map((product: any) => (
@@ -681,14 +685,14 @@ export default function QuickPOS() {
             <div>
               <label className="text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1">
                 <User className="h-3 w-3" />
-                Customer *
+                {t("quickPos.customer")}
               </label>
               <Select
                 value={selectedCustomer}
                 onValueChange={setSelectedCustomer}
               >
                 <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Select customer" />
+                  <SelectValue placeholder={t("quickPos.selectCustomer")} />
                 </SelectTrigger>
                 <SelectContent>
                   {customers.map((customer) => (
@@ -704,7 +708,7 @@ export default function QuickPOS() {
             <div>
               <label className="text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1">
                 <CreditCard className="h-3 w-3" />
-                Payment
+                {t("quickPos.paymentMethod")}
               </label>
               <Select
                 value={paymentMethod}
@@ -714,9 +718,9 @@ export default function QuickPOS() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="card">Card</SelectItem>
-                  <SelectItem value="upi">UPI</SelectItem>
+                  <SelectItem value="cash">{t("quickPos.cash")}</SelectItem>
+                  <SelectItem value="card">{t("quickPos.card")}</SelectItem>
+                  <SelectItem value="upi">{t("quickPos.upi")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -725,7 +729,7 @@ export default function QuickPOS() {
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs font-semibold text-gray-600 mb-1 block">
-                  Discount %
+                  {t("quickPos.discount")}
                 </label>
                 <Input
                   type="number"
@@ -738,7 +742,7 @@ export default function QuickPOS() {
               </div>
               <div>
                 <label className="text-xs font-semibold text-gray-600 mb-1 block">
-                  Tax %
+                  {t("quickPos.tax")}
                 </label>
                 <Input
                   type="number"
@@ -754,7 +758,7 @@ export default function QuickPOS() {
             {/* Totals */}
             <div className="space-y-1 text-sm border-t pt-2">
               <div className="flex justify-between">
-                <span>Subtotal:</span>
+                <span>{t("quickPos.subtotal")}:</span>
                 <span>₹{subtotal.toFixed(2)}</span>
               </div>
               {discountPercent > 0 && (
@@ -768,7 +772,7 @@ export default function QuickPOS() {
                 <span>₹{tax.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-lg font-bold border-t pt-1">
-                <span>Total:</span>
+                <span>{t("quickPos.total")}:</span>
                 <span className="text-orange-600">₹{total.toFixed(2)}</span>
               </div>
             </div>
@@ -782,7 +786,7 @@ export default function QuickPOS() {
                 className="h-12"
               >
                 <Pause className="h-4 w-4 mr-2" />
-                Hold (F3)
+                {t("quickPos.holdBill")} (F3)
               </Button>
               <Button
                 onClick={handleCompleteSale}
@@ -793,7 +797,9 @@ export default function QuickPOS() {
                 )}
               >
                 <Calculator className="h-5 w-5 mr-2" />
-                {isProcessing ? "Processing..." : "Complete (F2)"}
+                {isProcessing
+                  ? t("quickPos.processing")
+                  : `${t("quickPos.checkout")} (F2)`}
               </Button>
             </div>
           </div>

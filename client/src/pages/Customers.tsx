@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Card,
   CardContent,
@@ -6,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { PageLoadingSkeleton } from "@/components/ui/page-skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,10 +31,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useAuth } from "@/contexts/AuthContext";
 import { api, type Customer } from "@/lib/api";
-import { Plus, Search, Users, Phone, Mail, MapPin } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Users,
+  Phone,
+  Mail,
+  MapPin,
+  Loader2,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Customers() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const customerStore = useCustomerStore();
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
@@ -59,7 +70,7 @@ export default function Customers() {
         customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (customer.phone && customer.phone.includes(searchTerm)) ||
         (customer.email &&
-          customer.email.toLowerCase().includes(searchTerm.toLowerCase()))
+          customer.email.toLowerCase().includes(searchTerm.toLowerCase())),
     );
     setFilteredCustomers(filtered);
   }, [customerStore.customers, searchTerm]);
@@ -149,17 +160,12 @@ export default function Customers() {
 
   if (customerStore.loading) {
     return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Customers</h1>
-            <p className="text-muted-foreground">
-              Manage your customer database
-            </p>
-          </div>
-        </div>
-        <div className="text-center py-8">Loading customers...</div>
-      </div>
+      <PageLoadingSkeleton
+        statCols={3}
+        tableRows={6}
+        tableCols={4}
+        showAction
+      />
     );
   }
 
@@ -167,62 +173,64 @@ export default function Customers() {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Customers</h1>
-          <p className="text-muted-foreground">Manage your customer database</p>
+          <h1 className="text-3xl font-bold text-foreground">
+            {t("customers.title")}
+          </h1>
+          <p className="text-muted-foreground">{t("customers.subtitle")}</p>
         </div>
 
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
-              Add Customer
+              {t("customers.addCustomer")}
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Add New Customer</DialogTitle>
+              <DialogTitle>{t("customers.addNewCustomer")}</DialogTitle>
               <DialogDescription>
-                Enter customer information to add them to your database.
+                {t("customers.customerInfo")}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Name *</Label>
+                <Label htmlFor="name">{t("common.name")} *</Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => handleInputChange("name", e.target.value)}
-                  placeholder="Enter customer name"
+                  placeholder={t("customers.namePlaceholder")}
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone</Label>
+                <Label htmlFor="phone">{t("common.phone")}</Label>
                 <Input
                   id="phone"
                   value={formData.phone}
                   onChange={(e) => handleInputChange("phone", e.target.value)}
-                  placeholder="Enter phone number"
+                  placeholder={t("customers.phonePlaceholder")}
                   type="tel"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t("common.email")}</Label>
                 <Input
                   id="email"
                   value={formData.email}
                   onChange={(e) => handleInputChange("email", e.target.value)}
-                  placeholder="Enter email address"
+                  placeholder={t("customers.emailPlaceholder")}
                   type="email"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="address">Address</Label>
+                <Label htmlFor="address">{t("common.address")}</Label>
                 <Textarea
                   id="address"
                   value={formData.address}
                   onChange={(e) => handleInputChange("address", e.target.value)}
-                  placeholder="Enter address"
+                  placeholder={t("customers.addressPlaceholder")}
                   rows={3}
                 />
               </div>
@@ -232,14 +240,21 @@ export default function Customers() {
                   disabled={isSubmitting}
                   className="flex-1"
                 >
-                  {isSubmitting ? "Adding..." : "Add Customer"}
+                  {isSubmitting ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {t("customers.adding")}
+                    </span>
+                  ) : (
+                    t("customers.addCustomer")
+                  )}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setIsDialogOpen(false)}
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
               </div>
             </form>
@@ -248,10 +263,12 @@ export default function Customers() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Total Customers</CardTitle>
+            <CardTitle className="text-sm">
+              {t("customers.totalCustomers")}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -262,7 +279,9 @@ export default function Customers() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">With Phone</CardTitle>
+            <CardTitle className="text-sm">
+              {t("customers.withPhone")}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
@@ -273,7 +292,9 @@ export default function Customers() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">With Email</CardTitle>
+            <CardTitle className="text-sm">
+              {t("customers.withEmail")}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
@@ -288,14 +309,14 @@ export default function Customers() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Search className="h-5 w-5" />
-            Search Customers
+            {t("customers.searchCustomers")}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by name, phone, or email..."
+              placeholder={t("customers.searchPlaceholder")}
               className="pl-10"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -307,7 +328,7 @@ export default function Customers() {
       {/* Customers Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Customer List</CardTitle>
+          <CardTitle>{t("customers.customerList")}</CardTitle>
           <CardDescription>
             {filteredCustomers.length} of {customerStore.customers.length}{" "}
             customers
@@ -317,13 +338,13 @@ export default function Customers() {
           {filteredCustomers.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               {searchTerm
-                ? "No customers found matching your search."
-                : "No customers added yet."}
+                ? t("customers.noCustomersFound")
+                : t("customers.noCustomersYet")}
               {!searchTerm && (
                 <div className="mt-4">
                   <Button onClick={() => setIsDialogOpen(true)}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Add Your First Customer
+                    {t("customers.addFirstCustomer")}
                   </Button>
                 </div>
               )}
@@ -333,9 +354,9 @@ export default function Customers() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
+                    <TableHead>{t("common.name")}</TableHead>
                     <TableHead>Contact</TableHead>
-                    <TableHead>Address</TableHead>
+                    <TableHead>{t("common.address")}</TableHead>
                     <TableHead>Added On</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -364,7 +385,7 @@ export default function Customers() {
                           )}
                           {!customer.phone && !customer.email && (
                             <span className="text-muted-foreground text-sm">
-                              No contact info
+                              {t("customers.noContactInfo")}
                             </span>
                           )}
                         </div>
@@ -379,7 +400,7 @@ export default function Customers() {
                           </div>
                         ) : (
                           <span className="text-muted-foreground text-sm">
-                            No address
+                            {t("customers.noAddress")}
                           </span>
                         )}
                       </TableCell>
